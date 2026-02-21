@@ -1,0 +1,56 @@
+stages:
+  validate:
+    cmd: python -m src.features
+    deps:
+      - data/raw/churn.csv
+      - src/features.py
+      - src/schemas.py
+
+  train:
+    cmd: python -m src.train
+    deps:
+      - data/raw/churn.csv
+      - src/train.py
+      - src/features.py
+      - src/config.py
+    outs:
+      - models/versions:
+          persist: true
+    metrics:
+      - reports/train_report.json:
+          cache: false
+
+  evaluate:
+    cmd: >-
+      MODEL_DIR=$(ls -dt models/versions/* | head -n 1) &&
+      python -m src.evaluate --model-dir "$MODEL_DIR"
+    deps:
+      - src/evaluate.py
+      - data/raw/churn.csv
+      - models/versions
+    metrics:
+      - reports/eval_report.json:
+          cache: false
+
+  promote:
+    cmd: >-
+      MODEL_DIR=$(ls -dt models/versions/* | head -n 1) &&
+      python -m src.promote --model-dir "$MODEL_DIR" --eval-report reports/eval_report.json
+    deps:
+      - src/promote.py
+      - reports/eval_report.json
+      - models/versions
+    outs:
+      - models/latest/model.joblib:
+          persist: true
+      - models/latest/metadata.json:
+          persist: true
+
+  drift_report:
+    cmd: python -m src.drift_report
+    deps:
+      - data/raw/churn.csv
+      - src/drift_report.py
+    plots:
+      - reports/drift_report.html:
+          cache: false

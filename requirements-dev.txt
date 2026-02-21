@@ -1,2 +1,6 @@
 pytest==8.3.2
 ruff==0.6.8
+pre-commit>=3.8
+mypy>=1.11
+httpx>=0.27
+deepchecks>=0.18

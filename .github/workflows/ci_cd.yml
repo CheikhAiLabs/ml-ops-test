@@ -1,4 +1,4 @@
-name: ci-cd-mlops-local
+name: ci-cd-mlops
 
 on:
   push:
@@ -19,14 +19,25 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.13"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Setup Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ matrix.python-version }}-
 
       - name: Install
         run: |
@@ -53,6 +64,7 @@ jobs:
           python -m src.promote --model-dir "$MODEL_DIR" --eval-report reports/eval_report.json
 
       - name: Upload artifacts
+        if: matrix.python-version == '3.11'
         uses: actions/upload-artifact@v4
         with:
           name: model-and-reports
@@ -76,12 +88,21 @@ jobs:
           path: .
 
       - name: Show promoted metadata
-        run: |
-          cat models/latest/metadata.json
+        run: cat models/latest/metadata.json
 
-      - name: Build & deploy
-        run: |
-          docker compose up -d --build
+      - name: Build Docker image
+        run: docker compose build
+
+      - name: Trivy security scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ml-ops-test-inference-api:latest
+          format: table
+          exit-code: 0
+          severity: CRITICAL,HIGH
+
+      - name: Deploy
+        run: docker compose up -d
 
       - name: Wait for API
         run: sleep 5
@@ -92,6 +113,8 @@ jobs:
           curl -sS -X POST http://localhost:8001/predict \
             -H 'Content-Type: application/json' \
             -d '{"age":28,"tenure_months":6,"monthly_charges":39.9,"contract_type":0,"num_tickets":3}'
+          curl -sS http://localhost:8001/model-info
+          curl -sS http://localhost:8001/metrics
 
       - name: Teardown
         if: always()

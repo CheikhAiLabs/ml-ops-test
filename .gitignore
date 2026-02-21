@@ -16,9 +16,22 @@ models/versions/*
 models/latest/model.joblib
 models/latest/metadata.json
 reports/*.json
+reports/*.html
+
+# MLflow
+mlruns/
+
+# DVC
+dvc.lock
 
 # Pytest
 .pytest_cache/
 
 # Ruff
 .ruff_cache/
+
+# Mypy
+.mypy_cache/
+
+# Env overrides
+.env
