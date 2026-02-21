@@ -1,0 +1,90 @@
+name: ci-cd-mlops-local
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "src/**"
+      - "api/**"
+      - "data/raw/**"
+      - "requirements.txt"
+      - "requirements-dev.txt"
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - "tests/**"
+      - "Makefile"
+  workflow_dispatch: {}
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Tests
+        run: pytest -q
+
+      - name: Train
+        run: python -m src.train
+
+      - name: Evaluate latest trained
+        run: |
+          MODEL_DIR=$(ls -dt models/versions/* | head -n 1)
+          python -m src.evaluate --model-dir "$MODEL_DIR"
+
+      - name: Promote if metrics ok
+        run: |
+          MODEL_DIR=$(ls -dt models/versions/* | head -n 1)
+          python -m src.promote --model-dir "$MODEL_DIR" --eval-report reports/eval_report.json
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-and-reports
+          path: |
+            models/latest/model.joblib
+            models/latest/metadata.json
+            reports/train_report.json
+            reports/eval_report.json
+
+  cd_local:
+    needs: [ ci ]
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: model-and-reports
+          path: .
+
+      - name: Show promoted metadata
+        run: |
+          cat models/latest/metadata.json
+
+      - name: Deploy local
+        run: |
+          docker compose up -d --build
+
+      - name: Smoke test
+        run: |
+          curl -sS http://localhost:8000/health
+          curl -sS -X POST http://localhost:8000/predict \
+            -H 'Content-Type: application/json' \
+            -d '{"age":28,"tenure_months":6,"monthly_charges":39.9,"contract_type":0,"num_tickets":3}'

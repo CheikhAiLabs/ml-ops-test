@@ -1,0 +1,7 @@
+services:
+  inference-api:
+    build: .
+    container_name: inference-api
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
