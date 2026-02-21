@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ChurnGuard — Prédiction de Churn</title>
+  <title>ChurnGuard — Churn Prediction</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/style.css" />
@@ -20,13 +20,13 @@
       <span class="brand-text">ChurnGuard</span>
     </div>
     <div class="nav-links">
-      <a href="#predict" class="nav-link active" data-section="predict">Prédiction</a>
-      <a href="#model" class="nav-link" data-section="model">Modèle</a>
-      <a href="#about" class="nav-link" data-section="about">À propos</a>
+      <a href="#predict" class="nav-link active" data-section="predict">Predict</a>
+      <a href="#model" class="nav-link" data-section="model">Model</a>
+      <a href="#about" class="nav-link" data-section="about">About</a>
     </div>
     <div class="nav-status" id="api-status">
       <span class="status-dot"></span>
-      <span class="status-text">Connexion…</span>
+      <span class="status-text">Connecting…</span>
     </div>
   </nav>
 
@@ -36,58 +36,58 @@
     <!-- PREDICT SECTION -->
     <section id="predict" class="section active">
       <div class="section-header">
-        <h1>Prédiction de Churn Client</h1>
-        <p class="subtitle">Renseignez les informations du client pour estimer le risque de churn</p>
+        <h1>Customer Churn Prediction</h1>
+        <p class="subtitle">Enter customer details to estimate churn risk</p>
       </div>
 
       <div class="predict-grid">
         <!-- Form Card -->
         <div class="card glass-card form-card">
           <div class="card-header">
-            <h2>📋 Profil Client</h2>
+            <h2>📋 Customer Profile</h2>
           </div>
           <form id="predict-form" autocomplete="off">
             <div class="form-group">
-              <label for="age">Âge</label>
+              <label for="age">Age</label>
               <div class="input-wrapper">
                 <input type="number" id="age" name="age" min="18" max="80" value="35" required />
-                <span class="input-hint">18 – 80 ans</span>
+                <span class="input-hint">18 – 80 yrs</span>
               </div>
               <input type="range" class="range-slider" id="age-range" min="18" max="80" value="35" />
             </div>
 
             <div class="form-group">
-              <label for="tenure_months">Ancienneté (mois)</label>
+              <label for="tenure_months">Tenure (months)</label>
               <div class="input-wrapper">
                 <input type="number" id="tenure_months" name="tenure_months" min="0" max="72" value="24" required />
-                <span class="input-hint">0 – 72 mois</span>
+                <span class="input-hint">0 – 72 mo</span>
               </div>
               <input type="range" class="range-slider" id="tenure_months-range" min="0" max="72" value="24" />
             </div>
 
             <div class="form-group">
-              <label for="monthly_charges">Charges mensuelles (€)</label>
+              <label for="monthly_charges">Monthly Charges ($)</label>
               <div class="input-wrapper">
                 <input type="number" id="monthly_charges" name="monthly_charges" min="20" max="120" step="0.01" value="60" required />
-                <span class="input-hint">20 – 120 €</span>
+                <span class="input-hint">$20 – $120</span>
               </div>
               <input type="range" class="range-slider" id="monthly_charges-range" min="20" max="120" value="60" />
             </div>
 
             <div class="form-group">
-              <label for="contract_type">Type de contrat</label>
+              <label for="contract_type">Contract Type</label>
               <div class="select-wrapper">
                 <select id="contract_type" name="contract_type" required>
-                  <option value="0">Mensuel</option>
-                  <option value="1" selected>Annuel</option>
-                  <option value="2">Bi-annuel</option>
+                  <option value="0">Monthly</option>
+                  <option value="1" selected>Annual</option>
+                  <option value="2">Biennial</option>
                 </select>
                 <span class="select-arrow">▼</span>
               </div>
             </div>
 
             <div class="form-group">
-              <label for="num_tickets">Tickets support</label>
+              <label for="num_tickets">Support Tickets</label>
               <div class="input-wrapper">
                 <input type="number" id="num_tickets" name="num_tickets" min="0" max="10" value="1" required />
                 <span class="input-hint">0 – 10</span>
@@ -97,7 +97,7 @@
 
             <button type="submit" class="btn btn-primary" id="predict-btn">
               <span class="btn-icon">⚡</span>
-              <span class="btn-text">Prédire</span>
+              <span class="btn-text">Predict</span>
               <span class="btn-loader" hidden></span>
             </button>
           </form>
@@ -106,13 +106,13 @@
         <!-- Result Card -->
         <div class="card glass-card result-card" id="result-card">
           <div class="card-header">
-            <h2>📊 Résultat</h2>
+            <h2>📊 Result</h2>
           </div>
 
           <!-- Placeholder -->
           <div class="result-placeholder" id="result-placeholder">
             <div class="placeholder-icon">🔮</div>
-            <p>Remplissez le formulaire et cliquez sur <strong>Prédire</strong></p>
+            <p>Fill in the form and click <strong>Predict</strong></p>
           </div>
 
           <!-- Result content (hidden by default) -->
@@ -124,7 +124,7 @@
                 <path class="gauge-fill" id="gauge-fill" d="M 20 100 A 80 80 0 0 1 180 100" />
               </svg>
               <div class="gauge-value" id="gauge-value">0%</div>
-              <div class="gauge-label" id="gauge-label">Probabilité de churn</div>
+              <div class="gauge-label" id="gauge-label">Churn probability</div>
             </div>
 
             <!-- Verdict -->
@@ -136,15 +136,15 @@
             <!-- Details -->
             <div class="result-details" id="result-details">
               <div class="detail-row">
-                <span class="detail-label">Prédiction</span>
+                <span class="detail-label">Prediction</span>
                 <span class="detail-value" id="detail-prediction"></span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Probabilité</span>
+                <span class="detail-label">Probability</span>
                 <span class="detail-value" id="detail-proba"></span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Niveau de risque</span>
+                <span class="detail-label">Risk Level</span>
                 <span class="detail-value" id="detail-risk"></span>
               </div>
             </div>
@@ -157,27 +157,27 @@
 
       <!-- Quick presets -->
       <div class="card glass-card presets-card">
-        <h3>⚡ Profils types</h3>
+        <h3>⚡ Quick Presets</h3>
         <div class="presets-grid">
           <button class="preset-btn" data-preset='{"age":25,"tenure_months":3,"monthly_charges":95,"contract_type":0,"num_tickets":5}'>
             <span class="preset-emoji">🚨</span>
-            <span class="preset-name">Haut risque</span>
-            <span class="preset-desc">Jeune, récent, mensuel, beaucoup de tickets</span>
+            <span class="preset-name">High Risk</span>
+            <span class="preset-desc">Young, new, monthly, many tickets</span>
           </button>
           <button class="preset-btn" data-preset='{"age":45,"tenure_months":48,"monthly_charges":55,"contract_type":2,"num_tickets":0}'>
             <span class="preset-emoji">✅</span>
-            <span class="preset-name">Faible risque</span>
-            <span class="preset-desc">Fidèle, bi-annuel, peu de charges</span>
+            <span class="preset-name">Low Risk</span>
+            <span class="preset-desc">Loyal, biennial, low charges</span>
           </button>
           <button class="preset-btn" data-preset='{"age":35,"tenure_months":12,"monthly_charges":75,"contract_type":1,"num_tickets":2}'>
             <span class="preset-emoji">⚖️</span>
-            <span class="preset-name">Risque moyen</span>
-            <span class="preset-desc">Profil intermédiaire</span>
+            <span class="preset-name">Medium Risk</span>
+            <span class="preset-desc">Intermediate profile</span>
           </button>
           <button class="preset-btn" data-preset='{"age":60,"tenure_months":60,"monthly_charges":40,"contract_type":2,"num_tickets":1}'>
             <span class="preset-emoji">🏆</span>
-            <span class="preset-name">Client fidèle</span>
-            <span class="preset-desc">Senior, très ancien, contrat long</span>
+            <span class="preset-name">Loyal Customer</span>
+            <span class="preset-desc">Senior, long tenure, long contract</span>
           </button>
         </div>
       </div>
@@ -186,29 +186,29 @@
     <!-- MODEL SECTION -->
     <section id="model" class="section">
       <div class="section-header">
-        <h1>Informations du Modèle</h1>
-        <p class="subtitle">Détails techniques du modèle de prédiction en production</p>
+        <h1>Model Information</h1>
+        <p class="subtitle">Technical details of the production prediction model</p>
       </div>
 
       <div class="model-grid">
         <div class="card glass-card" id="model-info-card">
-          <div class="card-header"><h2>🤖 Modèle</h2></div>
+          <div class="card-header"><h2>🤖 Model</h2></div>
           <div id="model-info-content" class="model-info-content">
-            <p class="loading-text">Chargement des informations...</p>
+            <p class="loading-text">Loading model info...</p>
           </div>
         </div>
 
         <div class="card glass-card" id="model-metrics-card">
-          <div class="card-header"><h2>📈 Métriques</h2></div>
+          <div class="card-header"><h2>📈 Metrics</h2></div>
           <div id="model-metrics-content" class="model-metrics-content">
-            <p class="loading-text">Chargement des métriques...</p>
+            <p class="loading-text">Loading metrics...</p>
           </div>
         </div>
 
         <div class="card glass-card" id="model-features-card">
           <div class="card-header"><h2>🧬 Features</h2></div>
           <div id="model-features-content" class="model-features-content">
-            <p class="loading-text">Chargement...</p>
+            <p class="loading-text">Loading...</p>
           </div>
         </div>
       </div>
@@ -217,25 +217,25 @@
     <!-- ABOUT SECTION -->
     <section id="about" class="section">
       <div class="section-header">
-        <h1>À propos</h1>
-        <p class="subtitle">Architecture et stack technique du projet MLOps</p>
+        <h1>About</h1>
+        <p class="subtitle">Architecture and technical stack of the MLOps project</p>
       </div>
 
       <div class="about-grid">
         <div class="card glass-card">
           <div class="card-header"><h2>🏗️ Architecture</h2></div>
           <div class="about-content">
-            <p>ChurnGuard est un projet MLOps complet de prédiction de churn client, construit avec des pratiques industrielles :</p>
+            <p>ChurnGuard is a complete MLOps churn prediction project built with industry best practices:</p>
             <ul class="tech-list">
-              <li><strong>Modèle :</strong> GradientBoostingClassifier avec GridSearchCV (5-fold CV)</li>
-              <li><strong>API :</strong> FastAPI + Uvicorn (async, haute performance)</li>
-              <li><strong>Tracking :</strong> MLflow pour le versioning des expériences</li>
-              <li><strong>Validation :</strong> Pandera pour la qualité des données</li>
-              <li><strong>Monitoring :</strong> Prometheus + Grafana (métriques temps réel)</li>
-              <li><strong>Drift :</strong> Evidently pour la détection de dérive</li>
-              <li><strong>Pipeline :</strong> DVC pour la reproductibilité</li>
-              <li><strong>CI/CD :</strong> GitHub Actions + Docker multi-stage</li>
-              <li><strong>Qualité :</strong> Ruff, mypy, pre-commit, 20 tests pytest</li>
+              <li><strong>Model:</strong> GradientBoostingClassifier with GridSearchCV (5-fold CV)</li>
+              <li><strong>API:</strong> FastAPI + Uvicorn (async, high-performance)</li>
+              <li><strong>Tracking:</strong> MLflow for experiment versioning + real-time inference tracing</li>
+              <li><strong>Validation:</strong> Pandera for data quality checks</li>
+              <li><strong>Monitoring:</strong> Prometheus + Grafana (22-panel real-time dashboard)</li>
+              <li><strong>Drift:</strong> Evidently for data drift detection</li>
+              <li><strong>Pipeline:</strong> DVC for reproducibility</li>
+              <li><strong>CI/CD:</strong> GitHub Actions + Docker multi-stage + Trivy security scan</li>
+              <li><strong>Quality:</strong> Ruff, mypy, pre-commit, 20 pytest tests</li>
             </ul>
           </div>
         </div>
@@ -246,22 +246,22 @@
               <div class="endpoint">
                 <span class="method get">GET</span>
                 <code>/health</code>
-                <span class="endpoint-desc">État de l'API et du modèle</span>
+                <span class="endpoint-desc">API & model health status</span>
               </div>
               <div class="endpoint">
                 <span class="method post">POST</span>
                 <code>/predict</code>
-                <span class="endpoint-desc">Prédiction de churn</span>
+                <span class="endpoint-desc">Churn prediction</span>
               </div>
               <div class="endpoint">
                 <span class="method get">GET</span>
                 <code>/model-info</code>
-                <span class="endpoint-desc">Métadonnées du modèle</span>
+                <span class="endpoint-desc">Model metadata</span>
               </div>
               <div class="endpoint">
                 <span class="method get">GET</span>
                 <code>/metrics</code>
-                <span class="endpoint-desc">Métriques Prometheus</span>
+                <span class="endpoint-desc">Prometheus metrics (15+)</span>
               </div>
             </div>
           </div>

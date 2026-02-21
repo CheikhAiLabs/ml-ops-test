@@ -42,11 +42,11 @@ async function checkHealth() {
     const data = await res.json();
     statusDot.classList.add("online");
     statusDot.classList.remove("offline");
-    statusText.textContent = data.model_loaded ? "En ligne" : "Modèle absent";
+    statusText.textContent = data.model_loaded ? "Online" : "Model missing";
   } catch {
     statusDot.classList.add("offline");
     statusDot.classList.remove("online");
-    statusText.textContent = "Hors ligne";
+    statusText.textContent = "Offline";
   }
 }
 checkHealth();
@@ -101,7 +101,7 @@ async function loadModelInfo() {
       document.getElementById("model-features-content").innerHTML = `<div class="feature-chips">${chipsHtml}</div>`;
     }
   } catch {
-    document.getElementById("model-info-content").innerHTML = '<p class="loading-text">Impossible de charger les informations du modèle.</p>';
+    document.getElementById("model-info-content").innerHTML = '<p class="loading-text">Unable to load model information.</p>';
   }
 }
 
@@ -151,7 +151,7 @@ async function predict() {
 
   // UI loading state
   predictBtn.disabled = true;
-  predictBtn.querySelector(".btn-text").textContent = "Analyse en cours…";
+  predictBtn.querySelector(".btn-text").textContent = "Analyzing…";
   predictBtn.querySelector(".btn-loader").hidden = false;
 
   try {
@@ -163,16 +163,16 @@ async function predict() {
 
     if (!res.ok) {
       const err = await res.json();
-      throw new Error(err.detail || "Erreur serveur");
+      throw new Error(err.detail || "Server error");
     }
 
     const data = await res.json();
     showResult(data);
   } catch (err) {
-    alert(`Erreur: ${err.message}`);
+    alert(`Error: ${err.message}`);
   } finally {
     predictBtn.disabled = false;
-    predictBtn.querySelector(".btn-text").textContent = "Prédire";
+    predictBtn.querySelector(".btn-text").textContent = "Predict";
     predictBtn.querySelector(".btn-loader").hidden = true;
   }
 }
@@ -193,17 +193,17 @@ function showResult(data) {
   verdict.className = `verdict ${isChurn ? "churn" : "safe"}`;
   document.getElementById("verdict-icon").textContent = isChurn ? "⚠️" : "✅";
   document.getElementById("verdict-text").textContent = isChurn
-    ? "Risque de churn détecté"
-    : "Client fidèle";
+    ? "Churn risk detected"
+    : "Loyal customer";
 
   // Details
-  document.getElementById("detail-prediction").textContent = isChurn ? "Churn" : "Pas de churn";
+  document.getElementById("detail-prediction").textContent = isChurn ? "Churn" : "No Churn";
   document.getElementById("detail-proba").textContent = `${(proba * 100).toFixed(1)}%`;
 
   let riskLevel, riskColor;
-  if (proba >= 0.6) { riskLevel = "Élevé"; riskColor = "var(--danger)"; }
-  else if (proba >= 0.35) { riskLevel = "Moyen"; riskColor = "var(--warning)"; }
-  else { riskLevel = "Faible"; riskColor = "var(--success)"; }
+  if (proba >= 0.6) { riskLevel = "High"; riskColor = "var(--danger)"; }
+  else if (proba >= 0.35) { riskLevel = "Medium"; riskColor = "var(--warning)"; }
+  else { riskLevel = "Low"; riskColor = "var(--success)"; }
 
   const riskEl = document.getElementById("detail-risk");
   riskEl.textContent = riskLevel;
@@ -212,15 +212,15 @@ function showResult(data) {
   // Recommendation
   const recEl = document.getElementById("recommendation");
   if (proba >= 0.6) {
-    recEl.innerHTML = "💡 <strong>Action urgente recommandée :</strong> Proposer un geste commercial (remise, upgrade), contacter le client proactivement, et analyser les tickets support récents.";
+    recEl.innerHTML = "💡 <strong>Urgent action recommended:</strong> Offer a discount or upgrade, proactively reach out to the customer, and review recent support tickets.";
     recEl.style.borderLeftColor = "var(--danger)";
     recEl.style.background = "var(--danger-bg)";
   } else if (proba >= 0.35) {
-    recEl.innerHTML = "💡 <strong>Surveillance recommandée :</strong> Planifier un contact de satisfaction, vérifier les tickets ouverts, et proposer un contrat à durée plus longue.";
+    recEl.innerHTML = "💡 <strong>Monitoring recommended:</strong> Schedule a satisfaction check-in, review open tickets, and propose a longer-term contract.";
     recEl.style.borderLeftColor = "var(--warning)";
     recEl.style.background = "var(--warning-bg)";
   } else {
-    recEl.innerHTML = "💡 <strong>Client satisfait :</strong> Maintenir la qualité de service. Opportunité de cross-sell ou upsell.";
+    recEl.innerHTML = "💡 <strong>Satisfied customer:</strong> Maintain service quality. Opportunity for cross-sell or upsell.";
     recEl.style.borderLeftColor = "var(--success)";
     recEl.style.background = "var(--success-bg)";
   }
