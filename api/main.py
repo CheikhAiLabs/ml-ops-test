@@ -1,12 +1,12 @@
 import json
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict
 
 import joblib
-import mlflow
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -23,6 +23,14 @@ from pydantic import BaseModel
 from starlette.responses import Response
 
 from src.features import FEATURE_COLS
+
+# MLflow is optional — won't crash the API if unavailable
+try:
+    import mlflow
+
+    _MLFLOW_AVAILABLE = True
+except ImportError:
+    _MLFLOW_AVAILABLE = False
 
 logger = logging.getLogger("inference-api")
 
@@ -127,15 +135,22 @@ async def lifespan(application: FastAPI):
 
     APP_UPTIME.set_to_current_time()
 
-    # Configure MLflow tracing (best-effort)
-    try:
-        mlflow.set_tracking_uri(_metadata.get("mlflow_uri", "http://localhost:5000"))
-        mlflow.set_experiment("churn-classifier")
-        MLFLOW_TRACING_ENABLED = True
-        logger.info("MLflow tracing enabled")
-    except Exception:
-        logger.warning("MLflow tracing unavailable — running without traces")
-        MLFLOW_TRACING_ENABLED = False
+    # Configure MLflow tracing (best-effort, non-blocking)
+    if _MLFLOW_AVAILABLE:
+        try:
+            uri = os.getenv(
+                "MLFLOW_TRACKING_URI",
+                _metadata.get("mlflow_uri", "http://localhost:5000"),
+            )
+            mlflow.set_tracking_uri(uri)
+            mlflow.set_experiment("churn-classifier")
+            MLFLOW_TRACING_ENABLED = True
+            logger.info("MLflow tracing enabled at %s", uri)
+        except Exception as exc:
+            logger.warning("MLflow tracing unavailable: %s", exc)
+            MLFLOW_TRACING_ENABLED = False
+    else:
+        logger.info("MLflow not installed — tracing disabled")
 
     yield
 
@@ -256,22 +271,33 @@ def predict(req: PredictRequest) -> Dict[str, Any]:
 
         # MLflow trace (best-effort, non-blocking)
         if MLFLOW_TRACING_ENABLED:
-            try:
-                with mlflow.start_span(name="predict", span_type="CHAIN") as span:
-                    span.set_inputs(features)
-                    span.set_outputs(result)
-                    span.set_attributes(
-                        {
-                            "model_version": _metadata.get("model_version", ""),
-                            "latency_ms": round(latency * 1000, 2),
-                            "prediction": pred,
-                            "probability": proba or 0.0,
-                        }
-                    )
-            except Exception as trace_err:
-                logger.debug("MLflow trace failed: %s", trace_err)
+            _log_mlflow_trace(features, result, latency)
 
         return result
     except Exception as e:
         PREDICT_ERRORS.inc()
         raise HTTPException(status_code=400, detail=f"Prediction failed: {e}")
+
+
+def _log_mlflow_trace(
+    features: Dict[str, Any], result: Dict[str, Any], latency: float
+) -> None:
+    """Log a prediction trace to MLflow. Best-effort, never raises."""
+    try:
+
+        @mlflow.trace(
+            name="churn-prediction",
+            span_type="CHAIN",
+            attributes={
+                "model_version": _metadata.get("model_version", ""),
+                "model_type": _metadata.get("model_type", ""),
+            },
+        )
+        def _traced_predict(
+            input_features: Dict[str, Any],
+        ) -> Dict[str, Any]:
+            return result
+
+        _traced_predict(features)
+    except Exception as exc:
+        logger.debug("MLflow trace failed: %s", exc)

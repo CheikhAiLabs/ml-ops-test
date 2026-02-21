@@ -89,7 +89,7 @@ jobs:
         run: cat models/latest/metadata.json
 
       - name: Build Docker image
-        run: docker compose build
+        run: docker compose build inference-api
 
       - name: Trivy security scan
         uses: aquasecurity/trivy-action@master
@@ -100,19 +100,31 @@ jobs:
           severity: CRITICAL,HIGH
 
       - name: Deploy
-        run: docker compose up -d
+        run: docker compose up -d inference-api
 
       - name: Wait for API
-        run: sleep 5
+        run: |
+          echo "Waiting for API to be ready..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8001/health > /dev/null 2>&1; then
+              echo "API ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
 
       - name: Smoke test
         run: |
-          curl -sS http://localhost:8001/health
-          curl -sS -X POST http://localhost:8001/predict \
+          curl -sf http://localhost:8001/health
+          curl -sf -X POST http://localhost:8001/predict \
             -H 'Content-Type: application/json' \
             -d '{"age":28,"tenure_months":6,"monthly_charges":39.9,"contract_type":0,"num_tickets":3}'
-          curl -sS http://localhost:8001/model-info
-          curl -sS http://localhost:8001/metrics
+          curl -sf http://localhost:8001/model-info
+          curl -sf http://localhost:8001/metrics
+
+      - name: Docker logs
+        if: failure()
+        run: docker compose logs inference-api
 
       - name: Teardown
         if: always()
