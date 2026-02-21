@@ -19,6 +19,8 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    env:
+      MLFLOW_TRACKING_URI: ./mlruns
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -48,8 +50,6 @@ jobs:
         run: pytest -q
 
       - name: Train
-        env:
-          MLFLOW_TRACKING_URI: ./mlruns
         run: python -m src.train
 
       - name: Evaluate latest trained
