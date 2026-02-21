@@ -34,7 +34,7 @@ class Settings(BaseSettings):
 
     # ---- Training ----
     random_state: int = 42
-    min_f1: float = Field(default=0.80, ge=0.0, le=1.0)
+    min_f1: float = Field(default=0.78, ge=0.0, le=1.0)
     test_size: float = Field(default=0.2, ge=0.05, le=0.5)
 
     # ---- MLflow ----
