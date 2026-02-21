@@ -111,6 +111,20 @@ APP_UPTIME = Gauge("app_start_time_seconds", "Timestamp when app started")
 MLFLOW_TRACING_ENABLED = False
 
 
+def _mlflow_server_reachable(uri: str, timeout: float = 2.0) -> bool:
+    """Quick check if MLflow server is reachable (non-blocking)."""
+    if not uri.startswith("http"):
+        return False
+    import urllib.error
+    import urllib.request
+
+    try:
+        urllib.request.urlopen(f"{uri.rstrip('/')}/health", timeout=timeout)
+        return True
+    except (urllib.error.URLError, OSError, ValueError):
+        return False
+
+
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     """Load model once at application startup."""
@@ -135,20 +149,25 @@ async def lifespan(application: FastAPI):
 
     APP_UPTIME.set_to_current_time()
 
-    # Configure MLflow tracing (best-effort, non-blocking)
-    if _MLFLOW_AVAILABLE:
-        try:
-            uri = os.getenv(
-                "MLFLOW_TRACKING_URI",
-                _metadata.get("mlflow_uri", "http://localhost:5000"),
-            )
-            mlflow.set_tracking_uri(uri)
-            mlflow.set_experiment("churn-classifier")
-            MLFLOW_TRACING_ENABLED = True
-            logger.info("MLflow tracing enabled at %s", uri)
-        except Exception as exc:
-            logger.warning("MLflow tracing unavailable: %s", exc)
-            MLFLOW_TRACING_ENABLED = False
+    # Configure MLflow tracing — controlled by ENABLE_MLFLOW_TRACING env var
+    tracing_requested = os.getenv("ENABLE_MLFLOW_TRACING", "true").lower() == "true"
+    if tracing_requested and _MLFLOW_AVAILABLE:
+        uri = os.getenv(
+            "MLFLOW_TRACKING_URI",
+            _metadata.get("mlflow_uri", "http://localhost:5000"),
+        )
+        if _mlflow_server_reachable(uri):
+            try:
+                mlflow.set_tracking_uri(uri)
+                mlflow.set_experiment("churn-classifier")
+                MLFLOW_TRACING_ENABLED = True
+                logger.info("MLflow tracing enabled at %s", uri)
+            except Exception as exc:
+                logger.warning("MLflow tracing setup failed: %s", exc)
+        else:
+            logger.info("MLflow server not reachable at %s — tracing disabled", uri)
+    elif not tracing_requested:
+        logger.info("MLflow tracing disabled via ENABLE_MLFLOW_TRACING=false")
     else:
         logger.info("MLflow not installed — tracing disabled")
 

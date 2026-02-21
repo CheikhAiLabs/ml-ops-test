@@ -100,18 +100,22 @@ jobs:
           severity: CRITICAL,HIGH
 
       - name: Deploy
-        run: docker compose up -d inference-api
+        run: |
+          ENABLE_MLFLOW_TRACING=false docker compose up -d inference-api
 
       - name: Wait for API
         run: |
           echo "Waiting for API to be ready..."
-          for i in $(seq 1 30); do
+          for i in $(seq 1 60); do
             if curl -sf http://localhost:8001/health > /dev/null 2>&1; then
               echo "API ready after ${i}s"
-              break
+              exit 0
             fi
             sleep 1
           done
+          echo "API failed to start within 60s"
+          docker compose logs inference-api
+          exit 1
 
       - name: Smoke test
         run: |

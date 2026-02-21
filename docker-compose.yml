@@ -5,6 +5,8 @@ services:
     container_name: inference-api
     ports:
       - "8001:8000"
+    environment:
+      - ENABLE_MLFLOW_TRACING=${ENABLE_MLFLOW_TRACING:-true}
     volumes:
       - ./models:/app/models:ro
     restart: unless-stopped
