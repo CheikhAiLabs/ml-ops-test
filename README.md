@@ -6,14 +6,16 @@ Prerequisites
 - Optional: GitHub Actions self-hosted runner for local CD
 
 Local run (no CI)
-1) python3 -m venv .venv
+1) python3.13 -m venv .venv
 2) source .venv/bin/activate
-3) pip install -r requirements.txt -r requirements-dev.txt
+3) pip install --upgrade pip && pip install -r requirements.txt -r requirements-dev.txt
 4) make pipeline
 
+> **Note :** Python 3.14 n'est pas supporté (pydantic-core ne compile pas). Utilisez Python 3.11, 3.12 ou 3.13.
+
 API
-- GET  http://localhost:8000/health
-- POST http://localhost:8000/predict
+- GET  http://localhost:8001/health
+- POST http://localhost:8001/predict
   payload:
   {"age":28,"tenure_months":6,"monthly_charges":39.9,"contract_type":0,"num_tickets":3}
 

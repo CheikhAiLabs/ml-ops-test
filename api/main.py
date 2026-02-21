@@ -2,8 +2,11 @@ from pathlib import Path
 from typing import Any, Dict
 
 import joblib
+import pandas as pd
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+
+from src.features import FEATURE_COLS
 
 APP_ROOT = Path(__file__).resolve().parent.parent
 MODEL_PATH = APP_ROOT / "models" / "latest" / "model.joblib"
@@ -34,13 +37,13 @@ def predict(req: PredictRequest) -> Dict[str, Any]:
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    X = [[
-        req.age,
-        req.tenure_months,
-        req.monthly_charges,
-        req.contract_type,
-        req.num_tickets,
-    ]]
+    X = pd.DataFrame([{
+        "age": req.age,
+        "tenure_months": req.tenure_months,
+        "monthly_charges": req.monthly_charges,
+        "contract_type": req.contract_type,
+        "num_tickets": req.num_tickets,
+    }], columns=FEATURE_COLS)
 
     try:
         pred = int(model.predict(X)[0])

@@ -84,7 +84,7 @@ jobs:
 
       - name: Smoke test
         run: |
-          curl -sS http://localhost:8000/health
-          curl -sS -X POST http://localhost:8000/predict \
+          curl -sS http://localhost:8001/health
+          curl -sS -X POST http://localhost:8001/predict \
             -H 'Content-Type: application/json' \
             -d '{"age":28,"tenure_months":6,"monthly_charges":39.9,"contract_type":0,"num_tickets":3}'

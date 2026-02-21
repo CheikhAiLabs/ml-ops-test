@@ -39,8 +39,10 @@ api-down:
 	docker compose down
 
 smoke:
-	curl -sS http://localhost:8000/health | cat
-	curl -sS -X POST http://localhost:8000/predict \
+	@echo "Waiting for API to start..."
+	@sleep 5
+	curl -sS http://localhost:8001/health | cat
+	curl -sS -X POST http://localhost:8001/predict \
 	  -H 'Content-Type: application/json' \
 	  -d '{"age":28,"tenure_months":6,"monthly_charges":39.9,"contract_type":0,"num_tickets":3}' | cat
 
