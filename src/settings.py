@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     test_size: float = Field(default=0.2, ge=0.05, le=0.5)
 
     # ---- MLflow ----
-    mlflow_tracking_uri: str = str(_PROJECT_ROOT / "mlruns")
+    mlflow_tracking_uri: str = "http://localhost:5000"
     mlflow_experiment_name: str = "churn-classifier"
     mlflow_model_name: str = "churn-model"
 

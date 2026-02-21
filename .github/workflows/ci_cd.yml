@@ -48,6 +48,8 @@ jobs:
         run: pytest -q
 
       - name: Train
+        env:
+          MLFLOW_TRACKING_URI: ./mlruns
         run: python -m src.train
 
       - name: Evaluate latest trained

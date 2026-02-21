@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChurnGuard — Prédiction de Churn</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <!-- Animated background -->
+  <div class="bg-gradient"></div>
+  <div class="bg-grid"></div>
+
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="nav-brand">
+      <span class="brand-icon">🛡️</span>
+      <span class="brand-text">ChurnGuard</span>
+    </div>
+    <div class="nav-links">
+      <a href="#predict" class="nav-link active" data-section="predict">Prédiction</a>
+      <a href="#model" class="nav-link" data-section="model">Modèle</a>
+      <a href="#about" class="nav-link" data-section="about">À propos</a>
+    </div>
+    <div class="nav-status" id="api-status">
+      <span class="status-dot"></span>
+      <span class="status-text">Connexion…</span>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="container">
+
+    <!-- PREDICT SECTION -->
+    <section id="predict" class="section active">
+      <div class="section-header">
+        <h1>Prédiction de Churn Client</h1>
+        <p class="subtitle">Renseignez les informations du client pour estimer le risque de churn</p>
+      </div>
+
+      <div class="predict-grid">
+        <!-- Form Card -->
+        <div class="card glass-card form-card">
+          <div class="card-header">
+            <h2>📋 Profil Client</h2>
+          </div>
+          <form id="predict-form" autocomplete="off">
+            <div class="form-group">
+              <label for="age">Âge</label>
+              <div class="input-wrapper">
+                <input type="number" id="age" name="age" min="18" max="80" value="35" required />
+                <span class="input-hint">18 – 80 ans</span>
+              </div>
+              <input type="range" class="range-slider" id="age-range" min="18" max="80" value="35" />
+            </div>
+
+            <div class="form-group">
+              <label for="tenure_months">Ancienneté (mois)</label>
+              <div class="input-wrapper">
+                <input type="number" id="tenure_months" name="tenure_months" min="0" max="72" value="24" required />
+                <span class="input-hint">0 – 72 mois</span>
+              </div>
+              <input type="range" class="range-slider" id="tenure_months-range" min="0" max="72" value="24" />
+            </div>
+
+            <div class="form-group">
+              <label for="monthly_charges">Charges mensuelles (€)</label>
+              <div class="input-wrapper">
+                <input type="number" id="monthly_charges" name="monthly_charges" min="20" max="120" step="0.01" value="60" required />
+                <span class="input-hint">20 – 120 €</span>
+              </div>
+              <input type="range" class="range-slider" id="monthly_charges-range" min="20" max="120" value="60" />
+            </div>
+
+            <div class="form-group">
+              <label for="contract_type">Type de contrat</label>
+              <div class="select-wrapper">
+                <select id="contract_type" name="contract_type" required>
+                  <option value="0">Mensuel</option>
+                  <option value="1" selected>Annuel</option>
+                  <option value="2">Bi-annuel</option>
+                </select>
+                <span class="select-arrow">▼</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="num_tickets">Tickets support</label>
+              <div class="input-wrapper">
+                <input type="number" id="num_tickets" name="num_tickets" min="0" max="10" value="1" required />
+                <span class="input-hint">0 – 10</span>
+              </div>
+              <input type="range" class="range-slider" id="num_tickets-range" min="0" max="10" value="1" />
+            </div>
+
+            <button type="submit" class="btn btn-primary" id="predict-btn">
+              <span class="btn-icon">⚡</span>
+              <span class="btn-text">Prédire</span>
+              <span class="btn-loader" hidden></span>
+            </button>
+          </form>
+        </div>
+
+        <!-- Result Card -->
+        <div class="card glass-card result-card" id="result-card">
+          <div class="card-header">
+            <h2>📊 Résultat</h2>
+          </div>
+
+          <!-- Placeholder -->
+          <div class="result-placeholder" id="result-placeholder">
+            <div class="placeholder-icon">🔮</div>
+            <p>Remplissez le formulaire et cliquez sur <strong>Prédire</strong></p>
+          </div>
+
+          <!-- Result content (hidden by default) -->
+          <div class="result-content" id="result-content" hidden>
+            <!-- Risk gauge -->
+            <div class="gauge-container">
+              <svg class="gauge" viewBox="0 0 200 120">
+                <path class="gauge-bg" d="M 20 100 A 80 80 0 0 1 180 100" />
+                <path class="gauge-fill" id="gauge-fill" d="M 20 100 A 80 80 0 0 1 180 100" />
+              </svg>
+              <div class="gauge-value" id="gauge-value">0%</div>
+              <div class="gauge-label" id="gauge-label">Probabilité de churn</div>
+            </div>
+
+            <!-- Verdict -->
+            <div class="verdict" id="verdict">
+              <span class="verdict-icon" id="verdict-icon"></span>
+              <span class="verdict-text" id="verdict-text"></span>
+            </div>
+
+            <!-- Details -->
+            <div class="result-details" id="result-details">
+              <div class="detail-row">
+                <span class="detail-label">Prédiction</span>
+                <span class="detail-value" id="detail-prediction"></span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Probabilité</span>
+                <span class="detail-value" id="detail-proba"></span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Niveau de risque</span>
+                <span class="detail-value" id="detail-risk"></span>
+              </div>
+            </div>
+
+            <!-- Recommendation -->
+            <div class="recommendation" id="recommendation"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick presets -->
+      <div class="card glass-card presets-card">
+        <h3>⚡ Profils types</h3>
+        <div class="presets-grid">
+          <button class="preset-btn" data-preset='{"age":25,"tenure_months":3,"monthly_charges":95,"contract_type":0,"num_tickets":5}'>
+            <span class="preset-emoji">🚨</span>
+            <span class="preset-name">Haut risque</span>
+            <span class="preset-desc">Jeune, récent, mensuel, beaucoup de tickets</span>
+          </button>
+          <button class="preset-btn" data-preset='{"age":45,"tenure_months":48,"monthly_charges":55,"contract_type":2,"num_tickets":0}'>
+            <span class="preset-emoji">✅</span>
+            <span class="preset-name">Faible risque</span>
+            <span class="preset-desc">Fidèle, bi-annuel, peu de charges</span>
+          </button>
+          <button class="preset-btn" data-preset='{"age":35,"tenure_months":12,"monthly_charges":75,"contract_type":1,"num_tickets":2}'>
+            <span class="preset-emoji">⚖️</span>
+            <span class="preset-name">Risque moyen</span>
+            <span class="preset-desc">Profil intermédiaire</span>
+          </button>
+          <button class="preset-btn" data-preset='{"age":60,"tenure_months":60,"monthly_charges":40,"contract_type":2,"num_tickets":1}'>
+            <span class="preset-emoji">🏆</span>
+            <span class="preset-name">Client fidèle</span>
+            <span class="preset-desc">Senior, très ancien, contrat long</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- MODEL SECTION -->
+    <section id="model" class="section">
+      <div class="section-header">
+        <h1>Informations du Modèle</h1>
+        <p class="subtitle">Détails techniques du modèle de prédiction en production</p>
+      </div>
+
+      <div class="model-grid">
+        <div class="card glass-card" id="model-info-card">
+          <div class="card-header"><h2>🤖 Modèle</h2></div>
+          <div id="model-info-content" class="model-info-content">
+            <p class="loading-text">Chargement des informations...</p>
+          </div>
+        </div>
+
+        <div class="card glass-card" id="model-metrics-card">
+          <div class="card-header"><h2>📈 Métriques</h2></div>
+          <div id="model-metrics-content" class="model-metrics-content">
+            <p class="loading-text">Chargement des métriques...</p>
+          </div>
+        </div>
+
+        <div class="card glass-card" id="model-features-card">
+          <div class="card-header"><h2>🧬 Features</h2></div>
+          <div id="model-features-content" class="model-features-content">
+            <p class="loading-text">Chargement...</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABOUT SECTION -->
+    <section id="about" class="section">
+      <div class="section-header">
+        <h1>À propos</h1>
+        <p class="subtitle">Architecture et stack technique du projet MLOps</p>
+      </div>
+
+      <div class="about-grid">
+        <div class="card glass-card">
+          <div class="card-header"><h2>🏗️ Architecture</h2></div>
+          <div class="about-content">
+            <p>ChurnGuard est un projet MLOps complet de prédiction de churn client, construit avec des pratiques industrielles :</p>
+            <ul class="tech-list">
+              <li><strong>Modèle :</strong> GradientBoostingClassifier avec GridSearchCV (5-fold CV)</li>
+              <li><strong>API :</strong> FastAPI + Uvicorn (async, haute performance)</li>
+              <li><strong>Tracking :</strong> MLflow pour le versioning des expériences</li>
+              <li><strong>Validation :</strong> Pandera pour la qualité des données</li>
+              <li><strong>Monitoring :</strong> Prometheus + Grafana (métriques temps réel)</li>
+              <li><strong>Drift :</strong> Evidently pour la détection de dérive</li>
+              <li><strong>Pipeline :</strong> DVC pour la reproductibilité</li>
+              <li><strong>CI/CD :</strong> GitHub Actions + Docker multi-stage</li>
+              <li><strong>Qualité :</strong> Ruff, mypy, pre-commit, 20 tests pytest</li>
+            </ul>
+          </div>
+        </div>
+        <div class="card glass-card">
+          <div class="card-header"><h2>📡 Endpoints API</h2></div>
+          <div class="about-content">
+            <div class="endpoint-list">
+              <div class="endpoint">
+                <span class="method get">GET</span>
+                <code>/health</code>
+                <span class="endpoint-desc">État de l'API et du modèle</span>
+              </div>
+              <div class="endpoint">
+                <span class="method post">POST</span>
+                <code>/predict</code>
+                <span class="endpoint-desc">Prédiction de churn</span>
+              </div>
+              <div class="endpoint">
+                <span class="method get">GET</span>
+                <code>/model-info</code>
+                <span class="endpoint-desc">Métadonnées du modèle</span>
+              </div>
+              <div class="endpoint">
+                <span class="method get">GET</span>
+                <code>/metrics</code>
+                <span class="endpoint-desc">Métriques Prometheus</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p>ChurnGuard MLOps — Built with ❤️ by <strong>CheikhAiLabs</strong></p>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -22,6 +22,7 @@ COPY --from=builder /install /usr/local
 COPY api /app/api
 COPY src /app/src
 COPY models /app/models
+COPY static /app/static
 
 RUN chown -R appuser:appuser /app
 USER appuser

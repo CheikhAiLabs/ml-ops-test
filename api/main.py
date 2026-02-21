@@ -8,6 +8,8 @@ from typing import Any, Dict
 import joblib
 import pandas as pd
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from prometheus_client import Counter, Histogram, generate_latest
 from pydantic import BaseModel
 from starlette.responses import Response
@@ -52,6 +54,18 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan,
 )
+
+# ---------------------------------------------------------------------------
+# Static files & UI
+# ---------------------------------------------------------------------------
+STATIC_DIR = APP_ROOT / "static"
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+@app.get("/", include_in_schema=False)
+def serve_ui():
+    """Serve the ChurnGuard frontend."""
+    return FileResponse(str(STATIC_DIR / "index.html"))
 
 
 class PredictRequest(BaseModel):
