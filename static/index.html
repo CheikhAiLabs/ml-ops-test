@@ -37,7 +37,7 @@
     <section id="predict" class="section active">
       <div class="section-header">
         <h1>Customer Churn Prediction</h1>
-        <p class="subtitle">Enter customer details to estimate churn risk</p>
+        <p class="subtitle">Enter customer details to estimate churn risk with explainable AI</p>
       </div>
 
       <div class="predict-grid">
@@ -47,52 +47,149 @@
             <h2>📋 Customer Profile</h2>
           </div>
           <form id="predict-form" autocomplete="off">
-            <div class="form-group">
-              <label for="age">Age</label>
-              <div class="input-wrapper">
-                <input type="number" id="age" name="age" min="18" max="80" value="35" required />
-                <span class="input-hint">18 – 80 yrs</span>
+
+            <!-- Section: Customer -->
+            <div class="form-section">
+              <h3 class="form-section-title">👤 Customer</h3>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="gender">Gender</label>
+                  <div class="select-wrapper">
+                    <select id="gender" name="gender">
+                      <option value="0" selected>Male</option>
+                      <option value="1">Female</option>
+                    </select>
+                    <span class="select-arrow">▼</span>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="age">Age</label>
+                  <div class="input-wrapper">
+                    <input type="number" id="age" name="age" min="18" max="80" value="35" required />
+                    <span class="input-hint">18–80</span>
+                  </div>
+                  <input type="range" class="range-slider" id="age-range" min="18" max="80" value="35" />
+                </div>
+                <div class="form-group toggle-group">
+                  <label>Partner</label>
+                  <label class="toggle">
+                    <input type="checkbox" id="partner" />
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-label" id="partner-label">No</span>
+                  </label>
+                </div>
+                <div class="form-group toggle-group">
+                  <label>Dependents</label>
+                  <label class="toggle">
+                    <input type="checkbox" id="dependents" />
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-label" id="dependents-label">No</span>
+                  </label>
+                </div>
               </div>
-              <input type="range" class="range-slider" id="age-range" min="18" max="80" value="35" />
             </div>
 
-            <div class="form-group">
-              <label for="tenure_months">Tenure (months)</label>
-              <div class="input-wrapper">
-                <input type="number" id="tenure_months" name="tenure_months" min="0" max="72" value="24" required />
-                <span class="input-hint">0 – 72 mo</span>
+            <!-- Section: Services -->
+            <div class="form-section">
+              <h3 class="form-section-title">📱 Services</h3>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="internet_service">Internet</label>
+                  <div class="select-wrapper">
+                    <select id="internet_service" name="internet_service">
+                      <option value="0">None</option>
+                      <option value="1">DSL</option>
+                      <option value="2" selected>Fiber Optic</option>
+                    </select>
+                    <span class="select-arrow">▼</span>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="contract_type">Contract</label>
+                  <div class="select-wrapper">
+                    <select id="contract_type" name="contract_type">
+                      <option value="0">Monthly</option>
+                      <option value="1" selected>Annual</option>
+                      <option value="2">Biennial</option>
+                    </select>
+                    <span class="select-arrow">▼</span>
+                  </div>
+                </div>
+                <div class="form-group toggle-group">
+                  <label>Online Security</label>
+                  <label class="toggle">
+                    <input type="checkbox" id="online_security" />
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-label" id="online_security-label">No</span>
+                  </label>
+                </div>
+                <div class="form-group toggle-group">
+                  <label>Tech Support</label>
+                  <label class="toggle">
+                    <input type="checkbox" id="tech_support" />
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-label" id="tech_support-label">No</span>
+                  </label>
+                </div>
               </div>
-              <input type="range" class="range-slider" id="tenure_months-range" min="0" max="72" value="24" />
             </div>
 
-            <div class="form-group">
-              <label for="monthly_charges">Monthly Charges ($)</label>
-              <div class="input-wrapper">
-                <input type="number" id="monthly_charges" name="monthly_charges" min="20" max="120" step="0.01" value="60" required />
-                <span class="input-hint">$20 – $120</span>
+            <!-- Section: Billing -->
+            <div class="form-section">
+              <h3 class="form-section-title">💰 Billing</h3>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="tenure_months">Tenure (months)</label>
+                  <div class="input-wrapper">
+                    <input type="number" id="tenure_months" name="tenure_months" min="0" max="72" value="24" required />
+                    <span class="input-hint">0–72 mo</span>
+                  </div>
+                  <input type="range" class="range-slider" id="tenure_months-range" min="0" max="72" value="24" />
+                </div>
+                <div class="form-group">
+                  <label for="monthly_charges">Monthly Charges ($)</label>
+                  <div class="input-wrapper">
+                    <input type="number" id="monthly_charges" name="monthly_charges" min="18" max="120" step="0.01" value="65" required />
+                    <span class="input-hint">$18–$120</span>
+                  </div>
+                  <input type="range" class="range-slider" id="monthly_charges-range" min="18" max="120" value="65" />
+                </div>
+                <div class="form-group">
+                  <label for="payment_method">Payment</label>
+                  <div class="select-wrapper">
+                    <select id="payment_method" name="payment_method">
+                      <option value="0">Bank Transfer</option>
+                      <option value="1" selected>Credit Card</option>
+                      <option value="2">Electronic Check</option>
+                      <option value="3">Mailed Check</option>
+                    </select>
+                    <span class="select-arrow">▼</span>
+                  </div>
+                </div>
+                <div class="form-group toggle-group">
+                  <label>Paperless Billing</label>
+                  <label class="toggle">
+                    <input type="checkbox" id="paperless_billing" checked />
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-label" id="paperless_billing-label">Yes</span>
+                  </label>
+                </div>
               </div>
-              <input type="range" class="range-slider" id="monthly_charges-range" min="20" max="120" value="60" />
             </div>
 
-            <div class="form-group">
-              <label for="contract_type">Contract Type</label>
-              <div class="select-wrapper">
-                <select id="contract_type" name="contract_type" required>
-                  <option value="0">Monthly</option>
-                  <option value="1" selected>Annual</option>
-                  <option value="2">Biennial</option>
-                </select>
-                <span class="select-arrow">▼</span>
+            <!-- Section: Support -->
+            <div class="form-section">
+              <h3 class="form-section-title">🎫 Support</h3>
+              <div class="form-grid form-grid-single">
+                <div class="form-group">
+                  <label for="num_tickets">Support Tickets</label>
+                  <div class="input-wrapper">
+                    <input type="number" id="num_tickets" name="num_tickets" min="0" max="10" value="1" required />
+                    <span class="input-hint">0–10</span>
+                  </div>
+                  <input type="range" class="range-slider" id="num_tickets-range" min="0" max="10" value="1" />
+                </div>
               </div>
-            </div>
-
-            <div class="form-group">
-              <label for="num_tickets">Support Tickets</label>
-              <div class="input-wrapper">
-                <input type="number" id="num_tickets" name="num_tickets" min="0" max="10" value="1" required />
-                <span class="input-hint">0 – 10</span>
-              </div>
-              <input type="range" class="range-slider" id="num_tickets-range" min="0" max="10" value="1" />
             </div>
 
             <button type="submit" class="btn btn-primary" id="predict-btn">
@@ -149,6 +246,13 @@
               </div>
             </div>
 
+            <!-- Feature Contributions (Explainability) -->
+            <div class="contributions" id="contributions" hidden>
+              <h3 class="contributions-title">🔍 Key Drivers</h3>
+              <p class="contributions-subtitle">What drives this prediction</p>
+              <div class="contributions-list" id="contributions-list"></div>
+            </div>
+
             <!-- Recommendation -->
             <div class="recommendation" id="recommendation"></div>
           </div>
@@ -159,25 +263,25 @@
       <div class="card glass-card presets-card">
         <h3>⚡ Quick Presets</h3>
         <div class="presets-grid">
-          <button class="preset-btn" data-preset='{"age":25,"tenure_months":3,"monthly_charges":95,"contract_type":0,"num_tickets":5}'>
+          <button class="preset-btn" data-preset='{"gender":1,"age":25,"partner":0,"dependents":0,"tenure_months":3,"monthly_charges":95,"contract_type":0,"payment_method":2,"paperless_billing":1,"internet_service":2,"online_security":0,"tech_support":0,"num_tickets":5}'>
             <span class="preset-emoji">🚨</span>
             <span class="preset-name">High Risk</span>
-            <span class="preset-desc">Young, new, monthly, many tickets</span>
+            <span class="preset-desc">New, monthly, fiber, no support, e-check</span>
           </button>
-          <button class="preset-btn" data-preset='{"age":45,"tenure_months":48,"monthly_charges":55,"contract_type":2,"num_tickets":0}'>
+          <button class="preset-btn" data-preset='{"gender":0,"age":45,"partner":1,"dependents":1,"tenure_months":48,"monthly_charges":50,"contract_type":2,"payment_method":0,"paperless_billing":0,"internet_service":1,"online_security":1,"tech_support":1,"num_tickets":0}'>
             <span class="preset-emoji">✅</span>
             <span class="preset-name">Low Risk</span>
-            <span class="preset-desc">Loyal, biennial, low charges</span>
+            <span class="preset-desc">Loyal, biennial, DSL, full add-ons</span>
           </button>
-          <button class="preset-btn" data-preset='{"age":35,"tenure_months":12,"monthly_charges":75,"contract_type":1,"num_tickets":2}'>
+          <button class="preset-btn" data-preset='{"gender":0,"age":35,"partner":1,"dependents":0,"tenure_months":14,"monthly_charges":75,"contract_type":1,"payment_method":1,"paperless_billing":1,"internet_service":2,"online_security":0,"tech_support":1,"num_tickets":2}'>
             <span class="preset-emoji">⚖️</span>
             <span class="preset-name">Medium Risk</span>
-            <span class="preset-desc">Intermediate profile</span>
+            <span class="preset-desc">Annual contract, fiber, partial add-ons</span>
           </button>
-          <button class="preset-btn" data-preset='{"age":60,"tenure_months":60,"monthly_charges":40,"contract_type":2,"num_tickets":1}'>
+          <button class="preset-btn" data-preset='{"gender":1,"age":62,"partner":1,"dependents":1,"tenure_months":60,"monthly_charges":42,"contract_type":2,"payment_method":1,"paperless_billing":0,"internet_service":1,"online_security":1,"tech_support":1,"num_tickets":1}'>
             <span class="preset-emoji">🏆</span>
             <span class="preset-name">Loyal Customer</span>
-            <span class="preset-desc">Senior, long tenure, long contract</span>
+            <span class="preset-desc">Long tenure, DSL, all add-ons, low charges</span>
           </button>
         </div>
       </div>
@@ -206,7 +310,7 @@
         </div>
 
         <div class="card glass-card" id="model-features-card">
-          <div class="card-header"><h2>🧬 Features</h2></div>
+          <div class="card-header"><h2>🧬 Features (16)</h2></div>
           <div id="model-features-content" class="model-features-content">
             <p class="loading-text">Loading...</p>
           </div>
@@ -225,12 +329,13 @@
         <div class="card glass-card">
           <div class="card-header"><h2>🏗️ Architecture</h2></div>
           <div class="about-content">
-            <p>ChurnGuard is a complete MLOps churn prediction project built with industry best practices:</p>
+            <p>ChurnGuard is a production-grade MLOps churn prediction system built with industry best practices:</p>
             <ul class="tech-list">
-              <li><strong>Model:</strong> GradientBoostingClassifier with GridSearchCV (5-fold CV)</li>
+              <li><strong>Model:</strong> GradientBoostingClassifier with GridSearchCV (5-fold CV, 16 features)</li>
+              <li><strong>Explainability:</strong> Per-prediction feature contributions via leave-one-out attribution</li>
               <li><strong>API:</strong> FastAPI + Uvicorn (async, high-performance)</li>
               <li><strong>Tracking:</strong> MLflow for experiment versioning + real-time inference tracing</li>
-              <li><strong>Validation:</strong> Pandera for data quality checks</li>
+              <li><strong>Validation:</strong> Pandera for data quality checks (13 raw + 3 engineered features)</li>
               <li><strong>Monitoring:</strong> Prometheus + Grafana (22-panel real-time dashboard)</li>
               <li><strong>Drift:</strong> Evidently for data drift detection</li>
               <li><strong>Pipeline:</strong> DVC for reproducibility</li>
@@ -251,12 +356,12 @@
               <div class="endpoint">
                 <span class="method post">POST</span>
                 <code>/predict</code>
-                <span class="endpoint-desc">Churn prediction</span>
+                <span class="endpoint-desc">Churn prediction + feature contributions</span>
               </div>
               <div class="endpoint">
                 <span class="method get">GET</span>
                 <code>/model-info</code>
-                <span class="endpoint-desc">Model metadata</span>
+                <span class="endpoint-desc">Model metadata & feature means</span>
               </div>
               <div class="endpoint">
                 <span class="method get">GET</span>

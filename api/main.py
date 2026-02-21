@@ -4,7 +4,7 @@ import os
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import joblib
 import pandas as pd
@@ -22,7 +22,7 @@ from prometheus_client import (
 from pydantic import BaseModel
 from starlette.responses import Response
 
-from src.features import FEATURE_COLS
+from src.features import FEATURE_COLS, RAW_FEATURE_COLS, engineer_features
 
 # MLflow is optional — won't crash the API if unavailable
 try:
@@ -43,6 +43,7 @@ META_PATH = APP_ROOT / "models" / "latest" / "metadata.json"
 # ---------------------------------------------------------------------------
 _model = None
 _metadata: Dict[str, Any] = {}
+_feature_means: Dict[str, float] = {}
 
 # ---------------------------------------------------------------------------
 # Prometheus metrics — rich instrumentation
@@ -101,6 +102,11 @@ FEATURE_CONTRACT = Counter(
     "Count of contract types seen",
     ["contract_type"],
 )
+FEATURE_INTERNET = Counter(
+    "feature_internet_service_total",
+    "Count of internet service types seen",
+    ["internet_service"],
+)
 
 # System-level
 MODEL_INFO = Info("model", "Currently loaded model metadata")
@@ -128,7 +134,7 @@ def _mlflow_server_reachable(uri: str, timeout: float = 2.0) -> bool:
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     """Load model once at application startup."""
-    global _model, _metadata, MLFLOW_TRACING_ENABLED
+    global _model, _metadata, _feature_means, MLFLOW_TRACING_ENABLED
     if MODEL_PATH.exists():
         _model = joblib.load(MODEL_PATH)
         logger.info("Model loaded from %s", MODEL_PATH)
@@ -146,6 +152,8 @@ async def lifespan(application: FastAPI):
                 "f1": str(_metadata.get("val_f1", "unknown")),
             }
         )
+        # Load feature means for contribution computation
+        _feature_means = _metadata.get("feature_means", {})
 
     APP_UPTIME.set_to_current_time()
 
@@ -175,8 +183,8 @@ async def lifespan(application: FastAPI):
 
 
 app = FastAPI(
-    title="Local MLOps Inference API",
-    version="2.0.0",
+    title="ChurnGuard Inference API",
+    version="3.0.0",
     lifespan=lifespan,
 )
 
@@ -194,10 +202,18 @@ def serve_ui():
 
 
 class PredictRequest(BaseModel):
+    gender: int
     age: float
+    partner: int
+    dependents: int
     tenure_months: float
     monthly_charges: float
     contract_type: int
+    payment_method: int
+    paperless_billing: int
+    internet_service: int
+    online_security: int
+    tech_support: int
     num_tickets: float
 
 
@@ -251,15 +267,26 @@ def predict(req: PredictRequest) -> Dict[str, Any]:
     if _model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
 
-    features = {
+    # Build raw features dict (what the user controls)
+    raw_features: Dict[str, Any] = {
+        "gender": req.gender,
         "age": req.age,
+        "partner": req.partner,
+        "dependents": req.dependents,
         "tenure_months": req.tenure_months,
         "monthly_charges": req.monthly_charges,
         "contract_type": req.contract_type,
+        "payment_method": req.payment_method,
+        "paperless_billing": req.paperless_billing,
+        "internet_service": req.internet_service,
+        "online_security": req.online_security,
+        "tech_support": req.tech_support,
         "num_tickets": req.num_tickets,
     }
 
-    X = pd.DataFrame([features], columns=FEATURE_COLS)
+    # Engineer features & build model input
+    X = engineer_features(pd.DataFrame([raw_features]))
+    X = X[FEATURE_COLS]
 
     # Observe input feature distributions
     FEATURE_AGE.observe(req.age)
@@ -267,13 +294,19 @@ def predict(req: PredictRequest) -> Dict[str, Any]:
     FEATURE_CHARGES.observe(req.monthly_charges)
     FEATURE_TICKETS.observe(req.num_tickets)
     FEATURE_CONTRACT.labels(contract_type=str(req.contract_type)).inc()
+    FEATURE_INTERNET.labels(internet_service=str(req.internet_service)).inc()
 
     try:
         # Run inference inside MLflow trace if enabled, otherwise directly
         if MLFLOW_TRACING_ENABLED:
-            result, latency = _predict_with_trace(X, features)
+            result, latency = _predict_with_trace(X, raw_features)
         else:
             result, latency = _run_inference(X)
+
+        # Compute per-feature contributions (explainability)
+        contributions = _compute_contributions(raw_features)
+        result["feature_contributions"] = contributions
+        result["churn_rate_baseline"] = _metadata.get("churn_rate", 0.33)
 
         # Prometheus counters
         PREDICT_COUNT.inc()
@@ -326,3 +359,42 @@ def _predict_with_trace(X: pd.DataFrame, features: Dict[str, Any]) -> tuple:
     except Exception as exc:
         logger.debug("MLflow trace failed, running without trace: %s", exc)
         return _run_inference(X)
+
+
+def _compute_contributions(
+    raw_features: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """Leave-one-out feature attribution.
+
+    For each raw feature, swap it to its training-set mean, re-engineer
+    derived features, and measure the probability change.  This tells the
+    user *which features drive this specific prediction*.
+    """
+    assert _model is not None  # noqa: S101
+    if not _feature_means:
+        return []
+
+    # Current probability
+    X_current = engineer_features(pd.DataFrame([raw_features]))[FEATURE_COLS]
+    current_proba = float(_model.predict_proba(X_current)[0][1])
+
+    contributions: List[Dict[str, Any]] = []
+    for feature in RAW_FEATURE_COLS:
+        if feature not in _feature_means:
+            continue
+        modified = raw_features.copy()
+        modified[feature] = _feature_means[feature]
+        X_mod = engineer_features(pd.DataFrame([modified]))[FEATURE_COLS]
+        mod_proba = float(_model.predict_proba(X_mod)[0][1])
+        contrib = current_proba - mod_proba
+        if abs(contrib) > 0.003:  # Only include meaningful contributions
+            contributions.append(
+                {
+                    "feature": feature,
+                    "value": raw_features[feature],
+                    "contribution": round(contrib, 4),
+                }
+            )
+
+    contributions.sort(key=lambda x: abs(x["contribution"]), reverse=True)
+    return contributions[:8]

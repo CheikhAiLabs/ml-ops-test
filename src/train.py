@@ -27,13 +27,31 @@ from src.config import (
     MODELS_VERSIONS_DIR,
     RANDOM_STATE,
 )
-from src.features import FEATURE_COLS, load_dataset, split_xy
+from src.features import FEATURE_COLS, RAW_FEATURE_COLS, load_dataset, split_xy
 from src.utils import ensure_dir, sha256_file, sha256_str, write_json
 
 
 def build_model() -> Pipeline:
-    numeric_features = ["age", "tenure_months", "monthly_charges", "num_tickets"]
-    categorical_features = ["contract_type"]
+    numeric_features = [
+        "age",
+        "tenure_months",
+        "monthly_charges",
+        "total_charges",
+        "ticket_rate",
+    ]
+    categorical_features = [
+        "gender",
+        "partner",
+        "dependents",
+        "senior_citizen",
+        "contract_type",
+        "payment_method",
+        "paperless_billing",
+        "internet_service",
+        "online_security",
+        "tech_support",
+        "num_tickets",
+    ]
 
     preprocessor = ColumnTransformer(
         transformers=[
@@ -48,10 +66,11 @@ def build_model() -> Pipeline:
 
 # Hyperparameter grid for tuning
 PARAM_GRID = {
-    "clf__n_estimators": [100, 200],
-    "clf__max_depth": [3, 5],
+    "clf__n_estimators": [200, 300, 500],
+    "clf__max_depth": [3, 5, 7],
     "clf__learning_rate": [0.05, 0.1],
     "clf__subsample": [0.8, 1.0],
+    "clf__min_samples_leaf": [5, 10],
 }
 
 
@@ -177,6 +196,11 @@ def main():
         model_path = version_dir / "model.joblib"
         joblib.dump(model, model_path)
 
+        # Feature means for explainability (leave-one-out contributions)
+        feature_means = {
+            col: round(float(X_train[col].mean()), 4) for col in RAW_FEATURE_COLS
+        }
+
         metadata = {
             "model_version": model_fingerprint,
             "model_type": "GradientBoostingClassifier",
@@ -190,6 +214,9 @@ def main():
             "val_recall": recall,
             "val_roc_auc": roc_auc,
             "feature_cols": FEATURE_COLS,
+            "raw_feature_cols": RAW_FEATURE_COLS,
+            "feature_means": feature_means,
+            "churn_rate": round(float(y.mean()), 4),
             "mlflow_run_id": mlflow.active_run().info.run_id,
         }
         write_json(version_dir / "metadata.json", metadata)

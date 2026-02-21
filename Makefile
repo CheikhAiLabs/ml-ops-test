@@ -44,6 +44,6 @@ smoke:
 	curl -sS http://localhost:8001/health | cat
 	curl -sS -X POST http://localhost:8001/predict \
 	  -H 'Content-Type: application/json' \
-	  -d '{"age":28,"tenure_months":6,"monthly_charges":39.9,"contract_type":0,"num_tickets":3}' | cat
+	  -d '{"gender":0,"age":28,"partner":0,"dependents":0,"tenure_months":6,"monthly_charges":39.9,"contract_type":0,"payment_method":2,"paperless_billing":1,"internet_service":2,"online_security":0,"tech_support":0,"num_tickets":3}' | cat
 
 pipeline: lint test train eval promote api-up smoke

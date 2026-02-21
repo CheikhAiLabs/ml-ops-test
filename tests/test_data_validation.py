@@ -4,81 +4,66 @@ import pandas as pd
 import pandera.errors
 import pytest
 
-from src.features import FEATURE_COLS, TARGET_COL, load_dataset, split_xy
+from src.features import (
+    FEATURE_COLS,
+    TARGET_COL,
+    engineer_features,
+    load_dataset,
+    split_xy,
+)
 from src.schemas import churn_schema
+
+
+def _make_row(**overrides):
+    """Return a single-row DataFrame with all required schema columns."""
+    base = {
+        "gender": 0,
+        "age": 30,
+        "partner": 0,
+        "dependents": 0,
+        "tenure_months": 12,
+        "monthly_charges": 49.9,
+        "contract_type": 1,
+        "payment_method": 1,
+        "paperless_billing": 0,
+        "internet_service": 1,
+        "online_security": 0,
+        "tech_support": 0,
+        "num_tickets": 1,
+        "churn": 0,
+    }
+    base.update(overrides)
+    return pd.DataFrame([base])
 
 
 class TestSchema:
     """Pandera schema validation tests."""
 
     def test_valid_data(self):
-        df = pd.DataFrame(
-            {
-                "age": [25, 40],
-                "tenure_months": [6, 24],
-                "monthly_charges": [29.9, 79.9],
-                "contract_type": [0, 1],
-                "num_tickets": [1, 0],
-                "churn": [1, 0],
-            }
+        df = pd.concat(
+            [_make_row(age=25, churn=1), _make_row(age=40)], ignore_index=True
         )
         validated = churn_schema.validate(df)
         assert len(validated) == 2
 
     def test_invalid_age_too_low(self):
-        df = pd.DataFrame(
-            {
-                "age": [5],
-                "tenure_months": [6],
-                "monthly_charges": [29.9],
-                "contract_type": [0],
-                "num_tickets": [1],
-                "churn": [1],
-            }
-        )
+        df = _make_row(age=5)
         with pytest.raises(pandera.errors.SchemaError):
             churn_schema.validate(df)
 
     def test_invalid_contract_type(self):
-        df = pd.DataFrame(
-            {
-                "age": [30],
-                "tenure_months": [12],
-                "monthly_charges": [49.9],
-                "contract_type": [5],
-                "num_tickets": [0],
-                "churn": [0],
-            }
-        )
+        df = _make_row(contract_type=5)
         with pytest.raises(pandera.errors.SchemaError):
             churn_schema.validate(df)
 
     def test_invalid_churn_value(self):
-        df = pd.DataFrame(
-            {
-                "age": [30],
-                "tenure_months": [12],
-                "monthly_charges": [49.9],
-                "contract_type": [1],
-                "num_tickets": [0],
-                "churn": [2],
-            }
-        )
+        df = _make_row(churn=2)
         with pytest.raises(pandera.errors.SchemaError):
             churn_schema.validate(df)
 
     def test_extra_column_rejected(self):
-        df = pd.DataFrame(
-            {
-                "age": [30],
-                "tenure_months": [12],
-                "monthly_charges": [49.9],
-                "contract_type": [1],
-                "num_tickets": [0],
-                "churn": [0],
-                "extra": [1],
-            }
-        )
+        df = _make_row()
+        df["extra"] = 1
         with pytest.raises(pandera.errors.SchemaError):
             churn_schema.validate(df)
 
@@ -87,16 +72,8 @@ class TestFeatures:
     """Feature splitting tests."""
 
     def test_split_xy_columns(self):
-        df = pd.DataFrame(
-            {
-                "age": [25],
-                "tenure_months": [6],
-                "monthly_charges": [29.9],
-                "contract_type": [0],
-                "num_tickets": [1],
-                "churn": [1],
-            }
-        )
+        df = _make_row(churn=1)
+        df = engineer_features(df)
         X, y = split_xy(df)
         assert list(X.columns) == FEATURE_COLS
         assert len(y) == 1

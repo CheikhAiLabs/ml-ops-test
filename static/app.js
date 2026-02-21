@@ -1,19 +1,47 @@
 /* ─────────────────────────────────────────────
-   ChurnGuard — Frontend Logic
+   ChurnGuard — Frontend Logic v3
    ───────────────────────────────────────────── */
 
 const API_BASE = window.location.origin;
 
+// ── Human-readable labels ────────────────────
+const FEATURE_LABELS = {
+  gender: "Gender",
+  age: "Age",
+  partner: "Partner",
+  dependents: "Dependents",
+  tenure_months: "Tenure",
+  monthly_charges: "Monthly Charges",
+  contract_type: "Contract",
+  payment_method: "Payment Method",
+  paperless_billing: "Paperless Billing",
+  internet_service: "Internet Service",
+  online_security: "Online Security",
+  tech_support: "Tech Support",
+  num_tickets: "Support Tickets",
+};
+
+const VALUE_LABELS = {
+  gender: { 0: "Male", 1: "Female" },
+  partner: { 0: "No", 1: "Yes" },
+  dependents: { 0: "No", 1: "Yes" },
+  contract_type: { 0: "Monthly", 1: "Annual", 2: "Biennial" },
+  payment_method: { 0: "Bank Transfer", 1: "Credit Card", 2: "E-Check", 3: "Mailed Check" },
+  paperless_billing: { 0: "No", 1: "Yes" },
+  internet_service: { 0: "None", 1: "DSL", 2: "Fiber Optic" },
+  online_security: { 0: "No", 1: "Yes" },
+  tech_support: { 0: "No", 1: "Yes" },
+};
+
 // ── DOM references ───────────────────────────
 const form = document.getElementById("predict-form");
 const predictBtn = document.getElementById("predict-btn");
-const resultCard = document.getElementById("result-card");
 const resultPlaceholder = document.getElementById("result-placeholder");
 const resultContent = document.getElementById("result-content");
 const statusDot = document.querySelector(".status-dot");
 const statusText = document.querySelector(".status-text");
 
-// Sync range sliders with inputs
+// ── Sync range sliders with inputs ───────────
 const rangeFields = ["age", "tenure_months", "monthly_charges", "num_tickets"];
 rangeFields.forEach((name) => {
   const input = document.getElementById(name);
@@ -21,6 +49,17 @@ rangeFields.forEach((name) => {
   if (!input || !range) return;
   input.addEventListener("input", () => { range.value = input.value; });
   range.addEventListener("input", () => { input.value = range.value; });
+});
+
+// ── Toggle switches: update label text ───────
+const toggleFields = ["partner", "dependents", "online_security", "tech_support", "paperless_billing"];
+toggleFields.forEach((name) => {
+  const checkbox = document.getElementById(name);
+  const label = document.getElementById(`${name}-label`);
+  if (!checkbox || !label) return;
+  const update = () => { label.textContent = checkbox.checked ? "Yes" : "No"; };
+  checkbox.addEventListener("change", update);
+  update(); // init
 });
 
 // ── Navigation ───────────────────────────────
@@ -64,8 +103,9 @@ async function loadModelInfo() {
       <div class="info-row"><span class="info-label">Type</span><span class="info-value">${data.model_type || "N/A"}</span></div>
       <div class="info-row"><span class="info-label">Version</span><span class="info-value">${(data.model_version || "").slice(0, 12)}…</span></div>
       <div class="info-row"><span class="info-label">MLflow Run</span><span class="info-value">${(data.mlflow_run_id || "").slice(0, 12)}…</span></div>
-      <div class="info-row"><span class="info-label">Random State</span><span class="info-value">${data.random_state ?? "N/A"}</span></div>
-      ${data.best_params ? `<div class="info-row"><span class="info-label">Best Params</span><span class="info-value" style="font-size:.75rem;max-width:200px;text-align:right;">${formatParams(data.best_params)}</span></div>` : ""}
+      <div class="info-row"><span class="info-label">Churn Rate</span><span class="info-value">${data.churn_rate ? (data.churn_rate * 100).toFixed(1) + "%" : "N/A"}</span></div>
+      <div class="info-row"><span class="info-label">Features</span><span class="info-value">${(data.feature_cols || []).length} (${(data.raw_feature_cols || []).length} raw + ${(data.feature_cols || []).length - (data.raw_feature_cols || []).length} engineered)</span></div>
+      ${data.best_params ? `<div class="info-row"><span class="info-label">Best Params</span><span class="info-value" style="font-size:.72rem;max-width:200px;text-align:right;">${formatParams(data.best_params)}</span></div>` : ""}
     `;
     document.getElementById("model-info-content").innerHTML = infoHtml;
 
@@ -95,10 +135,22 @@ async function loadModelInfo() {
       .join("");
     document.getElementById("model-metrics-content").innerHTML = metricsHtml;
 
-    // Features card
-    if (data.feature_cols) {
-      const chipsHtml = data.feature_cols.map((f) => `<span class="feature-chip">${f}</span>`).join("");
-      document.getElementById("model-features-content").innerHTML = `<div class="feature-chips">${chipsHtml}</div>`;
+    // Features card (distinguish raw vs engineered)
+    const rawCols = data.raw_feature_cols || [];
+    const allCols = data.feature_cols || [];
+    if (allCols.length) {
+      const chipsHtml = allCols
+        .map((f) => {
+          const isEngineered = !rawCols.includes(f);
+          return `<span class="feature-chip${isEngineered ? ' engineered' : ''}">${f}${isEngineered ? ' ⚙️' : ''}</span>`;
+        })
+        .join("");
+      document.getElementById("model-features-content").innerHTML =
+        `<div class="feature-chips">${chipsHtml}</div>
+         <p style="margin-top:.75rem;font-size:.75rem;color:var(--text-muted)">
+           <span class="feature-chip" style="font-size:.7rem;padding:.2rem .5rem">raw</span> = user input &nbsp;
+           <span class="feature-chip engineered" style="font-size:.7rem;padding:.2rem .5rem">engineered ⚙️</span> = auto-computed
+         </p>`;
     }
   } catch {
     document.getElementById("model-info-content").innerHTML = '<p class="loading-text">Unable to load model information.</p>';
@@ -117,12 +169,11 @@ loadModelInfo();
 // ── Gauge drawing ────────────────────────────
 function drawGauge(probability) {
   const fill = document.getElementById("gauge-fill");
-  const total = Math.PI * 80; // arc length
+  const total = Math.PI * 80;
   const offset = total * (1 - probability);
   fill.style.strokeDasharray = `${total}`;
   fill.style.strokeDashoffset = `${offset}`;
 
-  // Color based on risk
   if (probability >= 0.6) {
     fill.style.stroke = "#f87171";
   } else if (probability >= 0.35) {
@@ -142,14 +193,21 @@ form.addEventListener("submit", async (e) => {
 
 async function predict() {
   const payload = {
+    gender: parseInt(document.getElementById("gender").value),
     age: parseFloat(document.getElementById("age").value),
+    partner: document.getElementById("partner").checked ? 1 : 0,
+    dependents: document.getElementById("dependents").checked ? 1 : 0,
     tenure_months: parseFloat(document.getElementById("tenure_months").value),
     monthly_charges: parseFloat(document.getElementById("monthly_charges").value),
     contract_type: parseInt(document.getElementById("contract_type").value),
+    payment_method: parseInt(document.getElementById("payment_method").value),
+    paperless_billing: document.getElementById("paperless_billing").checked ? 1 : 0,
+    internet_service: parseInt(document.getElementById("internet_service").value),
+    online_security: document.getElementById("online_security").checked ? 1 : 0,
+    tech_support: document.getElementById("tech_support").checked ? 1 : 0,
     num_tickets: parseFloat(document.getElementById("num_tickets").value),
   };
 
-  // UI loading state
   predictBtn.disabled = true;
   predictBtn.querySelector(".btn-text").textContent = "Analyzing…";
   predictBtn.querySelector(".btn-loader").hidden = false;
@@ -177,6 +235,19 @@ async function predict() {
   }
 }
 
+// ── Format feature values for display ────────
+function formatFeatureValue(feature, value) {
+  if (VALUE_LABELS[feature] && VALUE_LABELS[feature][value] !== undefined) {
+    return VALUE_LABELS[feature][value];
+  }
+  if (feature === "monthly_charges") return `$${Number(value).toFixed(0)}`;
+  if (feature === "tenure_months") return `${value} mo`;
+  if (feature === "age") return `${value} yrs`;
+  if (feature === "num_tickets") return `${value}`;
+  return String(value);
+}
+
+// ── Show Result ──────────────────────────────
 function showResult(data) {
   resultPlaceholder.hidden = true;
   resultContent.hidden = false;
@@ -209,6 +280,9 @@ function showResult(data) {
   riskEl.textContent = riskLevel;
   riskEl.style.color = riskColor;
 
+  // Feature contributions
+  renderContributions(data.feature_contributions || []);
+
   // Recommendation
   const recEl = document.getElementById("recommendation");
   if (proba >= 0.6) {
@@ -225,8 +299,48 @@ function showResult(data) {
     recEl.style.background = "var(--success-bg)";
   }
 
-  // Remove animation class after it completes
   setTimeout(() => resultContent.classList.remove("pop-in"), 500);
+}
+
+// ── Render Feature Contributions ─────────────
+function renderContributions(contributions) {
+  const container = document.getElementById("contributions");
+  const list = document.getElementById("contributions-list");
+
+  if (!contributions || contributions.length === 0) {
+    container.hidden = true;
+    return;
+  }
+  container.hidden = false;
+
+  const maxContrib = Math.max(...contributions.map((c) => Math.abs(c.contribution)));
+
+  list.innerHTML = contributions
+    .slice(0, 6)
+    .map((c) => {
+      const isPositive = c.contribution > 0; // positive = pushes toward churn
+      const width = Math.min((Math.abs(c.contribution) / maxContrib) * 100, 100);
+      const color = isPositive ? "var(--danger)" : "var(--success)";
+      const label = FEATURE_LABELS[c.feature] || c.feature;
+      const valueStr = formatFeatureValue(c.feature, c.value);
+      const arrow = isPositive ? "↑" : "↓";
+      const direction = isPositive ? "Churn" : "Retain";
+      const pct = (Math.abs(c.contribution) * 100).toFixed(1);
+
+      return `
+        <div class="contrib-row">
+          <div class="contrib-header">
+            <span class="contrib-feature">${label}</span>
+            <span class="contrib-value">${valueStr}</span>
+          </div>
+          <div class="contrib-bar-track">
+            <div class="contrib-bar" style="width:${width}%;background:${color}"></div>
+          </div>
+          <span class="contrib-direction" style="color:${color}">${arrow} ${direction} ${pct}%</span>
+        </div>
+      `;
+    })
+    .join("");
 }
 
 // ── Presets ───────────────────────────────────
@@ -234,10 +348,18 @@ document.querySelectorAll(".preset-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     const preset = JSON.parse(btn.dataset.preset);
     Object.entries(preset).forEach(([key, value]) => {
+      // Handle toggles (checkboxes)
+      const checkbox = document.getElementById(key);
+      if (checkbox && checkbox.type === "checkbox") {
+        checkbox.checked = value === 1;
+        // Trigger change event for label update
+        checkbox.dispatchEvent(new Event("change"));
+        return;
+      }
+      // Handle inputs and selects
       const input = document.getElementById(key);
       if (input) {
         input.value = value;
-        // Sync range slider
         const range = document.getElementById(`${key}-range`);
         if (range) range.value = value;
       }

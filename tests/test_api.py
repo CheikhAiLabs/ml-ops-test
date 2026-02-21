@@ -23,10 +23,18 @@ class TestHealthEndpoint:
 
 class TestPredictEndpoint:
     VALID_PAYLOAD = {
+        "gender": 0,
         "age": 28,
+        "partner": 0,
+        "dependents": 0,
         "tenure_months": 6,
         "monthly_charges": 39.9,
         "contract_type": 0,
+        "payment_method": 2,
+        "paperless_billing": 1,
+        "internet_service": 2,
+        "online_security": 0,
+        "tech_support": 0,
         "num_tickets": 3,
     }
 
