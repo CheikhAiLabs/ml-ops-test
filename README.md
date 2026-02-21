@@ -129,7 +129,7 @@ Hooks: ruff check, ruff format, mypy, trailing-whitespace, YAML/JSON validation,
 
 Push to `main` or modify `data/raw/churn.csv` → triggers automatically:
 
-- **CI**: matrix test (Python 3.11 + 3.13), lint, train, evaluate, promote, upload artifacts
+- **CI**: Python 3.11, lint, test, train, evaluate, promote, upload artifacts
 - **CD**: Docker build, deploy, smoke test all 4 endpoints, **Trivy** security scan
 - Manual dispatch available via `workflow_dispatch`
 

@@ -19,25 +19,22 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.13"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python ${{ matrix.python-version }}
+      - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.11"
 
       - name: Cache pip
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('requirements*.txt') }}
+          key: ${{ runner.os }}-pip-3.11-${{ hashFiles('requirements*.txt') }}
           restore-keys: |
-            ${{ runner.os }}-pip-${{ matrix.python-version }}-
+            ${{ runner.os }}-pip-3.11-
 
       - name: Install
         run: |
@@ -64,7 +61,6 @@ jobs:
           python -m src.promote --model-dir "$MODEL_DIR" --eval-report reports/eval_report.json
 
       - name: Upload artifacts
-        if: matrix.python-version == '3.11'
         uses: actions/upload-artifact@v4
         with:
           name: model-and-reports
