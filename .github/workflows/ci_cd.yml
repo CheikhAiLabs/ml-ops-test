@@ -61,9 +61,9 @@ jobs:
             reports/train_report.json
             reports/eval_report.json
 
-  cd_local:
+  cd:
     needs: [ ci ]
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -78,9 +78,12 @@ jobs:
         run: |
           cat models/latest/metadata.json
 
-      - name: Deploy local
+      - name: Build & deploy
         run: |
           docker compose up -d --build
+
+      - name: Wait for API
+        run: sleep 5
 
       - name: Smoke test
         run: |
@@ -88,3 +91,7 @@ jobs:
           curl -sS -X POST http://localhost:8001/predict \
             -H 'Content-Type: application/json' \
             -d '{"age":28,"tenure_months":6,"monthly_charges":39.9,"contract_type":0,"num_tickets":3}'
+
+      - name: Teardown
+        if: always()
+        run: docker compose down

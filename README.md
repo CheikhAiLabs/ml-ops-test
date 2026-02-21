@@ -1,9 +1,8 @@
 MLOps local pipeline (CI/CD) with data-triggered retrain and local deployment
 
 Prerequisites
-- Python 3.11+
+- Python 3.11+ (3.11, 3.12 ou 3.13)
 - Docker + docker compose
-- Optional: GitHub Actions self-hosted runner for local CD
 
 Local run (no CI)
 1) python3.13 -m venv .venv
@@ -24,7 +23,9 @@ Data change simulation
 - Run: make pipeline
 - In CI: pushing the change triggers retrain automatically
 
-GitHub local CD
-- Configure a self-hosted runner on your machine
-- Push to main
-- The workflow will train, evaluate, promote, then deploy via docker compose locally
+GitHub CI/CD
+- Push to main (ou modifier data/raw/churn.csv) → déclenche automatiquement le workflow
+- Job CI : lint, test, train, evaluate, promote, upload artifacts
+- Job CD : build Docker, deploy, smoke test
+- Tout tourne sur les runners GitHub (ubuntu-latest), pas de self-hosted requis
+- Déclenchement manuel possible via workflow_dispatch dans l'onglet Actions
