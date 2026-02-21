@@ -6,11 +6,19 @@ from pathlib import Path
 from typing import Any, Dict
 
 import joblib
+import mlflow
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from prometheus_client import Counter, Histogram, generate_latest
+from prometheus_client import (
+    Counter,
+    Gauge,
+    Histogram,
+    Info,
+    Summary,
+    generate_latest,
+)
 from pydantic import BaseModel
 from starlette.responses import Response
 
@@ -29,23 +37,106 @@ _model = None
 _metadata: Dict[str, Any] = {}
 
 # ---------------------------------------------------------------------------
-# Prometheus metrics
+# Prometheus metrics — rich instrumentation
 # ---------------------------------------------------------------------------
+# Request-level
+HTTP_REQUESTS = Counter(
+    "http_requests_total",
+    "Total HTTP requests",
+    ["method", "endpoint", "status"],
+)
+HTTP_LATENCY = Histogram(
+    "http_request_duration_seconds",
+    "HTTP request latency",
+    ["method", "endpoint"],
+    buckets=[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5],
+)
+
+# Prediction-level
 PREDICT_COUNT = Counter("predict_total", "Total prediction requests")
 PREDICT_CHURN = Counter("predict_churn_total", "Predictions where churn=1")
-PREDICT_LATENCY = Histogram("predict_latency_seconds", "Prediction latency")
+PREDICT_NO_CHURN = Counter("predict_no_churn_total", "Predictions where churn=0")
+PREDICT_LATENCY = Histogram(
+    "predict_latency_seconds",
+    "Model inference latency (model only)",
+    buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5],
+)
+PREDICT_ERRORS = Counter("predict_errors_total", "Failed prediction requests")
+PREDICT_PROBABILITY = Summary(
+    "predict_probability",
+    "Distribution of churn probabilities",
+)
+
+# Feature-level (input monitoring)
+FEATURE_AGE = Histogram(
+    "feature_age",
+    "Distribution of age feature",
+    buckets=[20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70],
+)
+FEATURE_TENURE = Histogram(
+    "feature_tenure_months",
+    "Distribution of tenure_months feature",
+    buckets=[6, 12, 18, 24, 30, 36, 42, 48, 54, 60],
+)
+FEATURE_CHARGES = Histogram(
+    "feature_monthly_charges",
+    "Distribution of monthly_charges feature",
+    buckets=[20, 30, 40, 50, 60, 70, 80, 90, 100],
+)
+FEATURE_TICKETS = Histogram(
+    "feature_num_tickets",
+    "Distribution of num_tickets feature",
+    buckets=[0, 1, 2, 3, 4, 5, 6, 7, 8],
+)
+FEATURE_CONTRACT = Counter(
+    "feature_contract_type_total",
+    "Count of contract types seen",
+    ["contract_type"],
+)
+
+# System-level
+MODEL_INFO = Info("model", "Currently loaded model metadata")
+MODEL_LOADED = Gauge("model_loaded", "Whether a model is currently loaded")
+APP_UPTIME = Gauge("app_start_time_seconds", "Timestamp when app started")
+
+# MLflow tracing config
+MLFLOW_TRACING_ENABLED = False
 
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     """Load model once at application startup."""
-    global _model, _metadata
+    global _model, _metadata, MLFLOW_TRACING_ENABLED
     if MODEL_PATH.exists():
         _model = joblib.load(MODEL_PATH)
         logger.info("Model loaded from %s", MODEL_PATH)
+        MODEL_LOADED.set(1)
+    else:
+        MODEL_LOADED.set(0)
+
     if META_PATH.exists():
         _metadata = json.loads(META_PATH.read_text(encoding="utf-8"))
         logger.info("Metadata loaded: version=%s", _metadata.get("model_version"))
+        MODEL_INFO.info(
+            {
+                "version": str(_metadata.get("model_version", "unknown")),
+                "type": str(_metadata.get("model_type", "unknown")),
+                "f1": str(_metadata.get("val_f1", "unknown")),
+            }
+        )
+
+    APP_UPTIME.set_to_current_time()
+
+    # Configure MLflow tracing (best-effort)
+    try:
+        mlflow.set_tracking_uri(_metadata.get("mlflow_uri", "http://localhost:5000"))
+        mlflow.set_experiment("churn-classifier")
+        MLFLOW_TRACING_ENABLED = True
+        logger.info("MLflow tracing enabled")
+    except Exception:
+        logger.warning("MLflow tracing unavailable — running without traces")
+        MLFLOW_TRACING_ENABLED = False
+
     yield
 
 
@@ -77,6 +168,27 @@ class PredictRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Middleware — instrument ALL HTTP requests
+# ---------------------------------------------------------------------------
+@app.middleware("http")
+async def prometheus_middleware(request: Request, call_next):
+    endpoint = request.url.path
+    method = request.method
+    start = time.perf_counter()
+    try:
+        response = await call_next(request)
+        status = str(response.status_code)
+    except Exception:
+        status = "500"
+        raise
+    finally:
+        duration = time.perf_counter() - start
+        HTTP_REQUESTS.labels(method=method, endpoint=endpoint, status=status).inc()
+        HTTP_LATENCY.labels(method=method, endpoint=endpoint).observe(duration)
+    return response
+
+
+# ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 @app.get("/health")
@@ -105,18 +217,22 @@ def predict(req: PredictRequest) -> Dict[str, Any]:
     if _model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
 
-    X = pd.DataFrame(
-        [
-            {
-                "age": req.age,
-                "tenure_months": req.tenure_months,
-                "monthly_charges": req.monthly_charges,
-                "contract_type": req.contract_type,
-                "num_tickets": req.num_tickets,
-            }
-        ],
-        columns=FEATURE_COLS,
-    )
+    features = {
+        "age": req.age,
+        "tenure_months": req.tenure_months,
+        "monthly_charges": req.monthly_charges,
+        "contract_type": req.contract_type,
+        "num_tickets": req.num_tickets,
+    }
+
+    X = pd.DataFrame([features], columns=FEATURE_COLS)
+
+    # Observe input feature distributions
+    FEATURE_AGE.observe(req.age)
+    FEATURE_TENURE.observe(req.tenure_months)
+    FEATURE_CHARGES.observe(req.monthly_charges)
+    FEATURE_TICKETS.observe(req.num_tickets)
+    FEATURE_CONTRACT.labels(contract_type=str(req.contract_type)).inc()
 
     try:
         start = time.perf_counter()
@@ -126,11 +242,36 @@ def predict(req: PredictRequest) -> Dict[str, Any]:
             proba = float(_model.predict_proba(X)[0][1])
         latency = time.perf_counter() - start
 
+        # Prometheus counters
         PREDICT_COUNT.inc()
         PREDICT_LATENCY.observe(latency)
         if pred == 1:
             PREDICT_CHURN.inc()
+        else:
+            PREDICT_NO_CHURN.inc()
+        if proba is not None:
+            PREDICT_PROBABILITY.observe(proba)
 
-        return {"churn_prediction": pred, "churn_probability": proba}
+        result = {"churn_prediction": pred, "churn_probability": proba}
+
+        # MLflow trace (best-effort, non-blocking)
+        if MLFLOW_TRACING_ENABLED:
+            try:
+                with mlflow.start_span(name="predict", span_type="CHAIN") as span:
+                    span.set_inputs(features)
+                    span.set_outputs(result)
+                    span.set_attributes(
+                        {
+                            "model_version": _metadata.get("model_version", ""),
+                            "latency_ms": round(latency * 1000, 2),
+                            "prediction": pred,
+                            "probability": proba or 0.0,
+                        }
+                    )
+            except Exception as trace_err:
+                logger.debug("MLflow trace failed: %s", trace_err)
+
+        return result
     except Exception as e:
+        PREDICT_ERRORS.inc()
         raise HTTPException(status_code=400, detail=f"Prediction failed: {e}")
