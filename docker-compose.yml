@@ -7,6 +7,9 @@ services:
       - "8001:8000"
     environment:
       - ENABLE_MLFLOW_TRACING=${ENABLE_MLFLOW_TRACING:-true}
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    depends_on:
+      - mlflow
     volumes:
       - ./models:/app/models:ro
     restart: unless-stopped
@@ -28,6 +31,7 @@ services:
       --serve-artifacts
       --artifacts-destination /mlflow/artifacts
       --default-artifact-root mlflow-artifacts:/
+      --allowed-hosts localhost,localhost:5000,mlflow,mlflow:5000,0.0.0.0,0.0.0.0:5000
     restart: unless-stopped
 
   # ---- Prometheus ----

@@ -269,28 +269,21 @@ def predict(req: PredictRequest) -> Dict[str, Any]:
     FEATURE_CONTRACT.labels(contract_type=str(req.contract_type)).inc()
 
     try:
-        start = time.perf_counter()
-        pred = int(_model.predict(X)[0])
-        proba = None
-        if hasattr(_model, "predict_proba"):
-            proba = float(_model.predict_proba(X)[0][1])
-        latency = time.perf_counter() - start
+        # Run inference inside MLflow trace if enabled, otherwise directly
+        if MLFLOW_TRACING_ENABLED:
+            result, latency = _predict_with_trace(X, features)
+        else:
+            result, latency = _run_inference(X)
 
         # Prometheus counters
         PREDICT_COUNT.inc()
         PREDICT_LATENCY.observe(latency)
-        if pred == 1:
+        if result["churn_prediction"] == 1:
             PREDICT_CHURN.inc()
         else:
             PREDICT_NO_CHURN.inc()
-        if proba is not None:
-            PREDICT_PROBABILITY.observe(proba)
-
-        result = {"churn_prediction": pred, "churn_probability": proba}
-
-        # MLflow trace (best-effort, non-blocking)
-        if MLFLOW_TRACING_ENABLED:
-            _log_mlflow_trace(features, result, latency)
+        if result["churn_probability"] is not None:
+            PREDICT_PROBABILITY.observe(result["churn_probability"])
 
         return result
     except Exception as e:
@@ -298,25 +291,38 @@ def predict(req: PredictRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail=f"Prediction failed: {e}")
 
 
-def _log_mlflow_trace(
-    features: Dict[str, Any], result: Dict[str, Any], latency: float
-) -> None:
-    """Log a prediction trace to MLflow. Best-effort, never raises."""
+def _run_inference(X: pd.DataFrame) -> tuple:
+    """Run model prediction and return (result_dict, latency_seconds)."""
+    assert _model is not None  # noqa: S101
+    start = time.perf_counter()
+    pred = int(_model.predict(X)[0])
+    proba = None
+    if hasattr(_model, "predict_proba"):
+        proba = float(_model.predict_proba(X)[0][1])
+    latency = time.perf_counter() - start
+    return {"churn_prediction": pred, "churn_probability": proba}, latency
+
+
+def _predict_with_trace(X: pd.DataFrame, features: Dict[str, Any]) -> tuple:
+    """Run inference wrapped in an MLflow trace — captures real latency."""
     try:
+        with mlflow.start_span(name="churn-prediction", span_type="CHAIN") as root:
+            root.set_inputs(features)
+            root.set_attributes(
+                {
+                    "model_version": _metadata.get("model_version", ""),
+                    "model_type": _metadata.get("model_type", ""),
+                }
+            )
 
-        @mlflow.trace(
-            name="churn-prediction",
-            span_type="CHAIN",
-            attributes={
-                "model_version": _metadata.get("model_version", ""),
-                "model_type": _metadata.get("model_type", ""),
-            },
-        )
-        def _traced_predict(
-            input_features: Dict[str, Any],
-        ) -> Dict[str, Any]:
-            return result
+            with mlflow.start_span(name="model-inference", span_type="LLM") as span:
+                span.set_inputs({"n_features": X.shape[1], "n_samples": X.shape[0]})
+                result, latency = _run_inference(X)
+                span.set_outputs(result)
+                span.set_attributes({"latency_ms": round(latency * 1000, 2)})
 
-        _traced_predict(features)
+            root.set_outputs(result)
+        return result, latency
     except Exception as exc:
-        logger.debug("MLflow trace failed: %s", exc)
+        logger.debug("MLflow trace failed, running without trace: %s", exc)
+        return _run_inference(X)
