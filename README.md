@@ -91,7 +91,7 @@ Each tool in this project serves a specific role in the MLOps lifecycle. Here th
 | **[Grafana](https://grafana.com/)** | Dashboard visualization — 22-panel auto-provisioned dashboard querying Prometheus data in real time | [Grafana docs](https://grafana.com/docs/grafana/latest/) |
 | **[Docker](https://www.docker.com/)** | Containerisation — multi-stage build, non-root user, health check, 4-service compose stack | [Docker docs](https://docs.docker.com/) |
 | **[GitHub Actions](https://github.com/features/actions)** | CI/CD — automated lint, test, train, evaluate, promote, build, deploy, security scan on every push | [Actions docs](https://docs.github.com/en/actions) |
-| **[pytest](https://docs.pytest.org/)** | Testing framework — 20 tests covering data validation, API endpoints, model behaviour, pipeline smoke | [pytest docs](https://docs.pytest.org/en/stable/) |
+| **[pytest](https://docs.pytest.org/)** | Testing framework — 20 tests (19 in CI) covering data validation, API endpoints, model behaviour, pipeline smoke | [pytest docs](https://docs.pytest.org/en/stable/) |
 | **[Ruff](https://docs.astral.sh/ruff/)** | Linting and formatting — fast Python linter/formatter replacing flake8, isort, black | [Ruff docs](https://docs.astral.sh/ruff/) |
 | **[pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/)** | Centralized configuration — type-safe, environment-overridable settings with `.env` file support | [pydantic-settings docs](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) |
 | **[Trivy](https://trivy.dev/)** | Container security scanner — scans Docker images for known vulnerabilities (CRITICAL/HIGH) in CI/CD | [Trivy docs](https://aquasecurity.github.io/trivy/) |
@@ -178,15 +178,18 @@ python -m src.train
 
 1. **Data loading** — loads the validated CSV, engineers features, splits into **80% train / 20% test** (stratified by `churn`)
 2. **Preprocessing pipeline** — `ColumnTransformer` applies `StandardScaler` to the 5 numeric features (age, tenure, charges, total_charges, ticket_rate) and passes the 11 binary/categorical features through unchanged
-3. **Hyperparameter search** — `GridSearchCV` tries **72 parameter combinations** with **5-fold cross-validation** (360 model fits total):
+3. **Hyperparameter search** — `GridSearchCV` explores a parameter grid with **5-fold cross-validation**. The grid size adapts automatically depending on the environment:
 
-   | Parameter | Values searched |
-   |:----------|:----------------|
-   | `n_estimators` | 200, 300, 500 |
-   | `max_depth` | 3, 5, 7 |
-   | `learning_rate` | 0.05, 0.1 |
-   | `subsample` | 0.8, 1.0 |
-   | `min_samples_leaf` | 5, 10 |
+   | Parameter | Local (full) | CI (fast) |
+   |:----------|:-------------|:----------|
+   | `n_estimators` | 200, 300, 500 | 200, 300 |
+   | `max_depth` | 3, 5, 7 | 3, 5 |
+   | `learning_rate` | 0.05, 0.1 | 0.1 |
+   | `subsample` | 0.8, 1.0 | 0.8 |
+   | `min_samples_leaf` | 5, 10 | 5 |
+   | **Total** | **72 candidates × 5 folds = 360 fits** | **4 candidates × 5 folds = 20 fits** |
+
+   > The `CI` environment variable (set automatically by GitHub Actions) switches to the lighter grid. This reduces CI training time from ~30 min to ~2 min while still validating the full pipeline. Locally, the complete 72-candidate search runs for maximum model quality.
 
 4. **Best model selection** — the combination with the highest mean cross-validation F1 score wins
 5. **Evaluation on holdout** — the best model is evaluated on the 20% test set (never seen during training)
@@ -303,7 +306,7 @@ In production, you would run this periodically (e.g. weekly) comparing fresh inf
 ### Step 9 — Testing (pytest)
 
 ```bash
-pytest -q    # Run all 20 tests
+pytest -q    # Run all 20 tests (19 in CI — smoke test auto-skipped)
 ```
 
 **What happens:** The test suite validates the entire pipeline across 4 test modules:
@@ -313,7 +316,7 @@ pytest -q    # Run all 20 tests
 | `test_data_validation.py` | 7 | **Schema enforcement** — verifies that valid data passes Pandera validation and that invalid data (wrong types, out-of-range values, extra columns) is correctly rejected. Tests each validation rule individually. |
 | `test_api.py` | 8 | **API correctness** — tests `/health`, `/predict`, `/model-info`, `/metrics` endpoints. Checks response shapes, status codes, content types. Tests error handling (missing fields, invalid values). Verifies Prometheus metrics export. |
 | `test_model_behavior.py` | 4 | **Model quality** — loads the promoted model, runs predictions on the test set, and checks: F1 ≥ 0.70, prediction probabilities in [0,1], deterministic outputs (same input → same output), no constant predictions (model actually learned). |
-| `test_pipeline_smoke.py` | 1 | **End-to-end smoke test** — runs the *full pipeline* in a temp directory: train → evaluate → promote. Verifies that model files are created, metadata is complete, and the quality gate passes. This catches integration issues. |
+| `test_pipeline_smoke.py` | 1 | **End-to-end smoke test** — runs the *full pipeline* in a temp directory: train → evaluate → promote. Verifies that model files are created, metadata is complete, and the quality gate passes. **Skipped in CI** (`@pytest.mark.skipif`) because the CI pipeline already runs train → eval → promote as explicit steps — running it twice would be redundant. |
 
 ### Step 10 — CI/CD (GitHub Actions)
 
@@ -323,8 +326,8 @@ Every push to `main` (touching `src/`, `api/`, `data/`, `tests/`, `Dockerfile`, 
 1. Sets up Python 3.11 with pip caching
 2. Installs production and dev dependencies
 3. **Lint** — runs `ruff check .` to catch style/import issues
-4. **Test** — runs all 20 pytest tests
-5. **Train** — trains the model with full MLflow logging
+4. **Test** — runs 19 pytest tests (smoke test skipped — see below)
+5. **Train** — trains the model with the CI-optimized grid (4 candidates instead of 72, all CPU cores)
 6. **Evaluate** — evaluates on the holdout set
 7. **Promote** — runs the quality gate and promotes if F1 passes
 8. **Upload** — stores `model.joblib`, `metadata.json`, and reports as GitHub artifacts
