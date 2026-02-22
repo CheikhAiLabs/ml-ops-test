@@ -85,13 +85,26 @@ def build_model() -> Pipeline:
 
 
 # Hyperparameter grid for tuning
-PARAM_GRID = {
+# Full grid: 3 × 3 × 2 × 2 × 2 = 72 candidates (local / production)
+_PARAM_GRID_FULL = {
     "clf__n_estimators": [200, 300, 500],
     "clf__max_depth": [3, 5, 7],
     "clf__learning_rate": [0.05, 0.1],
     "clf__subsample": [0.8, 1.0],
     "clf__min_samples_leaf": [5, 10],
 }
+
+# Lighter grid: 2 × 2 × 1 × 1 × 1 = 4 candidates (CI / fast mode)
+_PARAM_GRID_CI = {
+    "clf__n_estimators": [200, 300],
+    "clf__max_depth": [3, 5],
+    "clf__learning_rate": [0.1],
+    "clf__subsample": [0.8],
+    "clf__min_samples_leaf": [5],
+}
+
+# Auto-select: CI env var is set by GitHub Actions
+PARAM_GRID = _PARAM_GRID_CI if os.getenv("CI") else _PARAM_GRID_FULL
 
 
 def _log_confusion_matrix(y_true, y_pred, artifact_dir: Path):
@@ -468,13 +481,19 @@ def main():
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         pipe = build_model()
 
-        print("Running hyperparameter search (GridSearchCV 5-fold) ...")
+        n_candidates = 1
+        for v in PARAM_GRID.values():
+            n_candidates *= len(v)
+        print(
+            f"Running hyperparameter search "
+            f"(GridSearchCV 5-fold, {n_candidates} candidates) ..."
+        )
         grid = GridSearchCV(
             pipe,
             PARAM_GRID,
             cv=5,
             scoring="f1",
-            n_jobs=1,
+            n_jobs=-1,
             verbose=1,
             return_train_score=True,  # Also track train scores
         )

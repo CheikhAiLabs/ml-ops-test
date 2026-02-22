@@ -4,6 +4,8 @@ import os
 import subprocess
 import sys
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -17,6 +19,10 @@ def run(cmd):
     return p.stdout
 
 
+@pytest.mark.skipif(
+    os.getenv("CI") == "true",
+    reason="Skipped in CI — train/eval/promote steps already run explicitly",
+)
 def test_train_and_eval_smoke(tmp_path):
     out_dir = tmp_path / "models"
     report_dir = tmp_path / "reports"
