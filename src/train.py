@@ -187,7 +187,7 @@ def _log_learning_curve(model, X_train, y_train, artifact_dir: Path):
         cv=5,
         scoring="f1",
         train_sizes=np.linspace(0.1, 1.0, 10),
-        n_jobs=1,
+        n_jobs=-1,
         random_state=RANDOM_STATE,
     )
 
@@ -558,7 +558,10 @@ def main():
         )
         mlflow.log_param("cv_folds", 5)
         mlflow.log_param("cv_scoring", "f1")
-        mlflow.log_param("grid_n_candidates", 72)
+        n_candidates = 1
+        for v in PARAM_GRID.values():
+            n_candidates *= len(v)
+        mlflow.log_param("grid_n_candidates", n_candidates)
         for k, v in best_params.items():
             mlflow.log_param(k.replace("clf__", ""), v)
 
@@ -608,16 +611,20 @@ def main():
         transformed_feature_names = FEATURE_COLS  # Same order after pipeline
         _log_feature_importance(model, transformed_feature_names, tmp_dir)
 
-        # GridSearchCV results (all 72 candidates)
+        # GridSearchCV results
         _log_cv_results(grid, tmp_dir)
 
-        # Learning curve (takes a minute but very valuable)
-        print("Computing learning curve ...")
-        _log_learning_curve(model, X_train, y_train, tmp_dir)
+        # Learning curve & SHAP — skip in CI (adds ~5-8 min on slow runners)
+        _is_ci = bool(os.getenv("CI"))
 
-        # SHAP analysis
-        print("Computing SHAP values ...")
-        _log_shap_summary(model, X_val, transformed_feature_names, tmp_dir)
+        if not _is_ci:
+            print("Computing learning curve ...")
+            _log_learning_curve(model, X_train, y_train, tmp_dir)
+
+            print("Computing SHAP values ...")
+            _log_shap_summary(model, X_val, transformed_feature_names, tmp_dir)
+        else:
+            print("⏭️  Skipping learning curve & SHAP in CI (speed optimisation)")
 
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         # 8. LOG MODEL with signature & input example
