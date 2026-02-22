@@ -115,6 +115,7 @@ APP_UPTIME = Gauge("app_start_time_seconds", "Timestamp when app started")
 
 # MLflow tracing config
 MLFLOW_TRACING_ENABLED = False
+MLFLOW_AUTOLOG_ENABLED = False
 
 
 def _mlflow_server_reachable(uri: str, timeout: float = 2.0) -> bool:
@@ -134,7 +135,12 @@ def _mlflow_server_reachable(uri: str, timeout: float = 2.0) -> bool:
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     """Load model once at application startup."""
-    global _model, _metadata, _feature_means, MLFLOW_TRACING_ENABLED
+    global \
+        _model, \
+        _metadata, \
+        _feature_means, \
+        MLFLOW_TRACING_ENABLED, \
+        MLFLOW_AUTOLOG_ENABLED
     if MODEL_PATH.exists():
         _model = joblib.load(MODEL_PATH)
         logger.info("Model loaded from %s", MODEL_PATH)
@@ -167,7 +173,20 @@ async def lifespan(application: FastAPI):
         if _mlflow_server_reachable(uri):
             try:
                 mlflow.set_tracking_uri(uri)
-                mlflow.set_experiment("churn-classifier")
+                mlflow.set_experiment("churn-inference")
+
+                # Enable autolog for FastAPI — traces all requests automatically
+                try:
+                    mlflow.fastapi.autolog(
+                        log_traces=True,
+                        log_models=False,
+                        log_input_examples=True,
+                    )
+                    MLFLOW_AUTOLOG_ENABLED = True
+                    logger.info("MLflow FastAPI autolog enabled")
+                except Exception as exc:
+                    logger.info("MLflow FastAPI autolog not available: %s", exc)
+
                 MLFLOW_TRACING_ENABLED = True
                 logger.info("MLflow tracing enabled at %s", uri)
             except Exception as exc:
@@ -300,11 +319,14 @@ def predict(req: PredictRequest) -> Dict[str, Any]:
         # Run inference inside MLflow trace if enabled, otherwise directly
         if MLFLOW_TRACING_ENABLED:
             result, latency = _predict_with_trace(X, raw_features)
+            # Contributions are computed inside the trace
+            contributions = result.pop("_contributions", None)
+            if contributions is None:
+                contributions = _compute_contributions(raw_features)
         else:
             result, latency = _run_inference(X)
+            contributions = _compute_contributions(raw_features)
 
-        # Compute per-feature contributions (explainability)
-        contributions = _compute_contributions(raw_features)
         result["feature_contributions"] = contributions
         result["churn_rate_baseline"] = _metadata.get("churn_rate", 0.33)
 
@@ -337,7 +359,7 @@ def _run_inference(X: pd.DataFrame) -> tuple:
 
 
 def _predict_with_trace(X: pd.DataFrame, features: Dict[str, Any]) -> tuple:
-    """Run inference wrapped in an MLflow trace — captures real latency."""
+    """Run inference wrapped in an MLflow trace — captures rich telemetry."""
     try:
         with mlflow.start_span(name="churn-prediction", span_type="CHAIN") as root:
             root.set_inputs(features)
@@ -345,16 +367,66 @@ def _predict_with_trace(X: pd.DataFrame, features: Dict[str, Any]) -> tuple:
                 {
                     "model_version": _metadata.get("model_version", ""),
                     "model_type": _metadata.get("model_type", ""),
+                    "val_f1": str(_metadata.get("val_f1", "")),
+                    "churn_rate_baseline": str(_metadata.get("churn_rate", "")),
                 }
             )
+
+            with mlflow.start_span(
+                name="feature-engineering", span_type="PARSER"
+            ) as fe_span:
+                fe_span.set_inputs(
+                    {
+                        "raw_features": features,
+                        "n_raw_features": len(features),
+                    }
+                )
+                # Engineered features are already computed in X
+                engineered = {}
+                for col in ["senior_citizen", "total_charges", "ticket_rate"]:
+                    if col in X.columns:
+                        engineered[col] = float(X[col].iloc[0])
+                fe_span.set_outputs(
+                    {
+                        "engineered_features": engineered,
+                        "n_total_features": X.shape[1],
+                    }
+                )
 
             with mlflow.start_span(name="model-inference", span_type="LLM") as span:
                 span.set_inputs({"n_features": X.shape[1], "n_samples": X.shape[0]})
                 result, latency = _run_inference(X)
                 span.set_outputs(result)
-                span.set_attributes({"latency_ms": round(latency * 1000, 2)})
+                span.set_attributes(
+                    {
+                        "latency_ms": round(latency * 1000, 2),
+                        "prediction": str(result["churn_prediction"]),
+                        "probability": str(result.get("churn_probability", "")),
+                    }
+                )
 
-            root.set_outputs(result)
+            with mlflow.start_span(
+                name="explainability", span_type="RETRIEVER"
+            ) as explain_span:
+                contributions = _compute_contributions(features)
+                explain_span.set_inputs({"n_features_to_explain": len(features)})
+                explain_span.set_outputs(
+                    {
+                        "n_contributions": len(contributions),
+                        "top_feature": (
+                            contributions[0]["feature"] if contributions else "N/A"
+                        ),
+                        "contributions": contributions,
+                    }
+                )
+
+            root.set_outputs(
+                {
+                    **result,
+                    "n_contributions": len(contributions),
+                }
+            )
+        result["_contributions"] = contributions
         return result, latency
     except Exception as exc:
         logger.debug("MLflow trace failed, running without trace: %s", exc)
